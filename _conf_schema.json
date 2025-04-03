@@ -1,0 +1,20 @@
+{
+    "superusers": {
+        "description": "超级管理员",
+        "type": "list",
+        "hint": "提供单独设置的超级管理员列表，拥有最高权限",
+        "default": []
+    },
+        "ban_rand_time_min": {
+        "description": "随机禁言时的最小时长",
+        "type": "int",
+        "hint": "单位：秒",
+        "default": 30
+    },
+        "ban_rand_time_max": {
+        "description": "随机禁言时的最大时长",
+        "type": "int",
+        "hint": "单位：秒",
+        "default": 300
+    }
+}
