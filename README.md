@@ -16,6 +16,7 @@
 直接在astrbot的插件市场搜索astrbot_plugin_admin，点击安装，等待完成即可
 
 ## ⌨️ 使用说明
+![tmp9A19](https://github.com/user-attachments/assets/3ecd3121-aa38-4bf5-b0e9-566b96237008)
 
 
 ## 📌 注意事项
