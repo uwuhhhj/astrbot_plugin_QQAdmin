@@ -23,7 +23,7 @@ BAN_ME_QUOTES: list=[
 ]
 
 
-@register("astrbot_plugin_admin", "Zhalslar", "帮助你管理群聊", "1.0.0", "https://github.com/Zhalslar/astrbot_plugin_admin")
+@register("astrbot_plugin_QQAdmin", "Zhalslar", "帮助你管理群聊", "1.0.0")
 class AdminPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
