@@ -1,4 +1,4 @@
-# astrbot_plugin_admin
+# astrbot_plugin_QQAdmin
 
 
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
@@ -13,7 +13,7 @@
 
 
 ## 📦 安装
-直接在astrbot的插件市场搜索astrbot_plugin_admin，点击安装，等待完成即可
+直接在astrbot的插件市场搜索astrbot_plugin_QQAdmin，点击安装，等待完成即可
 
 ## ⌨️ 使用说明
 ![tmp9A19](https://github.com/user-attachments/assets/3ecd3121-aa38-4bf5-b0e9-566b96237008)
