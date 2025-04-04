@@ -9,9 +9,6 @@ from astrbot.core import AstrBotConfig
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
 
 
-superusers = []
-
-
 BAN_ME_QUOTES: list=[
     "还真有人有这种奇怪的要求",
     "满足你",
@@ -55,12 +52,12 @@ class AdminPlugin(Star):
         return [str(seg.qq) for seg in messages if (isinstance(seg, Comp.At) and str(seg.qq) != self_id)]
 
 
-    @staticmethod
-    async def check_permissions(event: AiocqhttpMessageEvent, user_id) -> int:
+
+    async def check_permissions(self, event: AiocqhttpMessageEvent, user_id) -> int:
         """获取指定用户的权限等级，等级0到3，对应权限分别开放到超管、群主、管理员、成员"""
         client = event.bot
         group_id = event.get_group_id()
-        if str(user_id) in superusers:
+        if str(user_id) in self.superusers:
             return 0
         all_info = await client.get_group_member_info(
             group_id=int(group_id),
