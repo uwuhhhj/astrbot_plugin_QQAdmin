@@ -53,7 +53,7 @@ class AdminPlugin(Star):
 
 
 
-    async def check_permissions(self, event: AiocqhttpMessageEvent, user_id) -> int:
+    async def get_perm_level(self, event: AiocqhttpMessageEvent, user_id) -> int:
         """获取指定用户的权限等级，等级0到3，对应权限分别开放到超管、群主、管理员、成员"""
         client = event.bot
         group_id = event.get_group_id()
@@ -86,21 +86,21 @@ class AdminPlugin(Star):
         self_id = event.get_self_id()
 
         # 检查用户的权限等级
-        user_perm = await self.check_permissions(event, user_id=sender_id)
+        user_perm = await self.get_perm_level(event, user_id=sender_id)
         at_ids = self.get_ats(event)
 
         if user_perm > user_level:
             return '你没这权限'
 
         # 检查bot的权限等级
-        bot_perm = await self.check_permissions(event, user_id=self_id)
+        bot_perm = await self.get_perm_level(event, user_id=self_id)
         if bot_perm > bot_level:
             return '我可没这权限'
 
         # 获取被at者的权限等级
         if at_ids:
             for aid in at_ids:
-                at_perm = await self.check_permissions(event,user_id=aid)
+                at_perm = await self.get_perm_level(event,user_id=aid)
                 if bot_perm >= at_perm:
                     return '我只能动身份比我低的人'
 
@@ -412,18 +412,18 @@ class AdminPlugin(Star):
     @filter.command("撤回")
     async def delete_msg(self, event: AiocqhttpMessageEvent):
         """撤回 引用的消息 和 发送的消息"""
-        messages = event.get_messages()
-        if isinstance(messages[0], Comp.Reply):
+        chain = event.get_messages()
+        first_seg = chain[0]
+        message_id = event.message_obj.message_id
+        if isinstance(first_seg, Comp.Reply):
             client = event.bot
-            reply_message_id = event.message_obj.message[0].id
-            message_id = event.message_obj.message_id
+            reply_message_id = first_seg.id
             await client.delete_msg(message_id=int(reply_message_id))
-            await client.delete_msg(message_id=int(message_id))
-
-
-
-
-
+            try:
+                await client.delete_msg(message_id=int(message_id))
+            except:
+                event.stop_event()
+#
 
 
 
