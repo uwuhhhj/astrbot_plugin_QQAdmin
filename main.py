@@ -235,14 +235,15 @@ class AdminPlugin(Star):
         send_id = event.get_sender_id()
         tids = self.get_ats(event) or [send_id]
         for tid in tids:
+            target_name = await self.get_nickname(event, user_id=tid)
+            replay = f"已将{target_name}的群昵称改为【{target_card}】"
+            yield event.plain_result(replay)
             await client.set_group_card(
                 group_id=int(group_id),
                 user_id=int(tid),
                 card=target_card
             )
-            target_name = await self.get_nickname(event, user_id=tid)
-            replay = f"已将{target_name}的群昵称改为【{target_card}】"
-            yield event.plain_result(replay)
+
 
 
     @filter.command("改我")
@@ -288,18 +289,15 @@ class AdminPlugin(Star):
         send_id = event.get_sender_id()
         tids = self.get_ats(event) or [send_id]
         for tid in tids:
+            target_name = await self.get_nickname(event, user_id=tid)
+            yield event.plain_result(f"已将{target_name}的头衔改为【{new_title}】")
             await client.set_group_special_title(
                 group_id=int(group_id),
                 user_id=int(tid),
                 special_title=new_title,
                 duration=-1
             )
-            chain = [
-                Comp.Plain(text="已将"),
-                Comp.At(qq=tid),
-                Comp.Plain(text=f"的头衔改为\n【{new_title}】")
-            ]
-            yield event.chain_result(chain)
+
 
 
     @filter.command("我要头衔")
@@ -323,7 +321,7 @@ class AdminPlugin(Star):
             special_title=new_title,
             duration=-1
         )
-        yield event.plain_result(f"已将你的头衔改为\n【{new_title}】")
+        yield event.plain_result(f"已将你的头衔改为【{new_title}】")
 
 
     @filter.command("踢了")
