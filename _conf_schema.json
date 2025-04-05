@@ -1,20 +1,210 @@
 {
-    "superusers": {
-        "description": "超级管理员",
-        "type": "list",
-        "hint": "提供单独设置的超级管理员列表，拥有最高权限",
-        "default": []
-    },
-        "ban_rand_time_min": {
-        "description": "随机禁言时的最小时长",
+  "superusers": {
+    "description": "超级管理员",
+    "type": "list",
+    "hint": "提供单独设置的超级管理员列表，拥有最高权限",
+    "default": ["2936169201"]
+  },
+  "perm_setting": {
+    "description": "命令权限设置",
+    "type": "object",
+    "hint": "设置各个命令的使用权限",
+    "items": {
+      "set_ban_perm": {
+        "description": "禁言",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "set_ban_me_perm": {
+        "description": "禁我",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      },
+      "cancel_ban_perm": {
+        "description": "解禁",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "set_whole_ban_perm": {
+        "description": "全体禁言",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "cancel_whole_ban_perm": {
+        "description": "解除全体禁言",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "set_card_perm": {
+        "description": "改名",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "set_card_me_perm": {
+        "description": "改我",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      },
+      "set_title_perm": {
+        "description": "头衔",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "set_title_me_perm": {
+        "description": "我要头衔",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      },
+      "group_kick_perm": {
+        "description": "踢了",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "group_block_perm": {
+        "description": "拉黑",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "set_admin_perm": {
+        "description": "设置管理员",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "群主"
+      },
+      "cancel_admin_perm": {
+        "description": "取消管理员",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "群主"
+      },
+      "set_essence_perm": {
+        "description": "设精",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      },
+      "self.cancel_essence_perm": {
+        "description": "取精",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      },
+      "delete_msg_perm": {
+        "description": "撤回",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      }
+    }
+  },
+  "ban_time_setting": {
+    "description": "随机禁言设置",
+    "type": "object",
+    "hint": "若禁言命令未指定禁言时长，则使用随机时长，时长范围如下",
+    "items": {
+      "ban_rand_time_min": {
+        "description": "随机禁言的最小时长",
         "type": "int",
         "hint": "单位：秒",
         "default": 30
-    },
-        "ban_rand_time_max": {
-        "description": "随机禁言时的最大时长",
+      },
+      "ban_rand_time_max": {
+        "description": "随机禁言的最大时长",
         "type": "int",
         "hint": "单位：秒",
         "default": 300
+      }
     }
+  }
 }

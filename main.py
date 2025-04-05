@@ -25,10 +25,12 @@ class AdminPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.superusers = config.get('superusers')
-        self.ban_rand_time_min=config.get('ban_rand_time_min') # 随机禁言时的最小时长(秒)
-        self.ban_rand_time_max =config.get('ban_rand_time_max') # 随机禁言时的最大时长(秒)
 
+        ban_time_setting: Dict = config.get('ban_time_setting')
+        self.ban_rand_time_min: int = ban_time_setting.get('ban_rand_time_min') # 随机禁言时的最小时长(秒)
+        self.ban_rand_time_max: int = ban_time_setting.get('ban_rand_time_max') # 随机禁言时的最大时长(秒)
 
+        self.perms = config.get('perm_setting') # 权限配置
 
 
     @staticmethod
@@ -70,17 +72,34 @@ class AdminPlugin(Star):
         print(f"当前用户权限等级：{level}")
         return level
 
+    @staticmethod
+    def perm_to_level(user_perm):
+        """权限到等级的映射"""
+        perm_to_level = {
+            "超管": 0,
+            "群主": 1,
+            "管理员": 2,
+            "成员": 3
+        }
+        if user_perm not in perm_to_level:
+            return 4
+
+        # 获取对应的等级
+        user_level = perm_to_level[user_perm]
+        return user_level
+
     async def perm_block(
             self,
             event: AiocqhttpMessageEvent,
-            user_level: int = 2,  # 默认用户权限等级为2（管理员）
-            bot_level: int = 2,  # 默认机器人权限等级为2（管理员）
+            user_perm :str =  "管理员",
+            bot_perm :str = "管理员",
     ) -> str | None:
         """
         执行权限检查。
-        用户和机器人的权限等级默认为2（管理员权限）。
         如果权限不足，返回提示信息；否则返回None表示权限检查通过。
         """
+        user_level = self.perm_to_level(user_perm)
+        bot_level = self.perm_to_level(bot_perm)
 
         sender_id = event.get_sender_id()
         self_id = event.get_self_id()
@@ -102,16 +121,17 @@ class AdminPlugin(Star):
             for aid in at_ids:
                 at_perm = await self.get_perm_level(event,user_id=aid)
                 if bot_perm >= at_perm:
-                    return '我只能动身份比我低的人'
+                    return '我动不了这人'
 
         return None  # 权限检查通过，未被阻塞
 
 
     @filter.command("禁言")
-    async def set_group_ban(self, event: AiocqhttpMessageEvent, time:int=None):
+    async def set_ban(self, event: AiocqhttpMessageEvent, time:int=None):
         """禁言 60 @user """
-        result = await self.perm_block(event, user_level=2, bot_level=2)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('set_ban_perm')
+        ):
             yield event.plain_result(result)
             return
         client = event.bot
@@ -126,29 +146,35 @@ class AdminPlugin(Star):
             )
 
     @filter.command("禁我")
-    async def set_group_ban_me(self, event: AiocqhttpMessageEvent, time: int = None):
+    async def set_ban_me(self, event: AiocqhttpMessageEvent, time: int = None):
         """禁我 60"""
-        result = await self.perm_block(event, user_level=3, bot_level=2)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('set_ban_me_perm')
+        ):
             yield event.plain_result(result)
             return
         client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
         time = time or random.randint(self.ban_rand_time_min, self.ban_rand_time_max)
-        await client.set_group_ban(
-            group_id=int(group_id),
-            user_id=int(send_id),
-            duration=time
-        )
-        yield event.plain_result(random.choice(BAN_ME_QUOTES))
+        try:
+            await client.set_group_ban(
+                group_id=int(group_id),
+                user_id=int(send_id),
+                duration=time
+            )
+            yield event.plain_result(random.choice(BAN_ME_QUOTES))
+        except:
+            yield event.plain_result("我可禁言不了你")
 
 
     @filter.command("解禁")
-    async def cancel_group_ban(self, event: AiocqhttpMessageEvent):
+    async def cancel_ban(self, event: AiocqhttpMessageEvent):
         """解禁@user"""
-        result = await self.perm_block(event, user_level=3, bot_level=2)
-        if result:
+        if result := await self.perm_block(
+            event,
+            user_perm=self.perms.get('cancel_ban_perm')
+        ):
             yield event.plain_result(result)
             return
         tids = self.get_ats(event)
@@ -163,10 +189,12 @@ class AdminPlugin(Star):
 
 
     @filter.command("全体禁言")
-    async def set_group_whole_ban(self, event: AiocqhttpMessageEvent):
+    async def set_whole_ban(self, event: AiocqhttpMessageEvent):
         """全体禁言"""
-        result = await self.perm_block(event, user_level=2, bot_level=2)
-        if result:
+        if result := await self.perm_block(
+            event,
+            user_perm=self.perms.get('set_whole_ban_perm')
+        ):
             yield event.plain_result(result)
             return
         client = event.bot
@@ -176,10 +204,12 @@ class AdminPlugin(Star):
 
 
     @filter.command("解除全体禁言")
-    async def cancel_group_whole_ban(self, event: AiocqhttpMessageEvent):
+    async def cancel_whole_ban(self, event: AiocqhttpMessageEvent):
         """解除全体禁言"""
-        result = await self.perm_block(event, user_level=2, bot_level=2)
-        if result:
+        if result := await self.perm_block(
+            event,
+            user_perm=self.perms.get('cancel_whole_ban_perm', 2)
+        ):
             yield event.plain_result(result)
             return
         client = event.bot
@@ -189,14 +219,17 @@ class AdminPlugin(Star):
 
 
     @filter.command("改名")
-    async def set_group_card(self, event: AiocqhttpMessageEvent, target_card:str=None):
+    async def set_card(self, event: AiocqhttpMessageEvent, target_card:str=None):
         """改名 xxx @user"""
-        result = await self.perm_block(event, user_level=2, bot_level=2)
-        if result:
+        if result := await self.perm_block(
+            event,
+            user_perm=self.perms.get('set_card_perm')
+        ):
             yield event.plain_result(result)
             return
         if not target_card:
-            yield event.plain_result("想要什么新昵称？")
+            yield event.plain_result("你又不说改什么昵称")
+            return
         client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
@@ -207,44 +240,49 @@ class AdminPlugin(Star):
                 user_id=int(tid),
                 card=target_card
             )
-            chain = [
-                Comp.Plain(text="已将"),
-                Comp.At(qq=tid),
-                Comp.Plain(text=f"的群昵称改为\n【{target_card}】")
-            ]
-            yield event.chain_result(chain)
+            target_name = await self.get_nickname(event, user_id=tid)
+            replay = f"已将{target_name}的群昵称改为【{target_card}】"
+            yield event.plain_result(replay)
 
 
     @filter.command("改我")
-    async def set_group_card_me(self, event: AiocqhttpMessageEvent, target_card:str=None):
+    async def set_card_me(self, event: AiocqhttpMessageEvent, target_card:str=None):
         """改我 xxx"""
-        result = await self.perm_block(event, user_level=3, bot_level=1)
-        if result:
+        if result := await self.perm_block(
+            event,
+            user_perm=self.perms.get('set_card_me_perm')
+        ):
             yield event.plain_result(result)
             return
         if not target_card:
-            yield event.plain_result("想要什么新昵称？")
-
+            yield event.plain_result("你又不说要改成啥昵称")
+            return
         client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
-        await client.set_group_card(
-            group_id=int(group_id),
-            user_id=int(send_id),
-            card=target_card
-        )
-        yield event.plain_result(f"已将你的群昵称改为【{target_card}】")
+        try:
+            await client.set_group_card(
+                group_id=int(group_id),
+                user_id=int(send_id),
+                card=target_card
+            )
+            yield event.plain_result(f"已将你的群昵称改为【{target_card}】")
+        except:
+            yield event.plain_result(f"我可改不了你的群昵称")
 
 
     @filter.command("头衔")
-    async def set_group_special_title(self, event: AiocqhttpMessageEvent, new_title:str=None):
+    async def set_title(self, event: AiocqhttpMessageEvent, new_title:str=None):
         """头衔 xxx @user"""
-        result = await self.perm_block(event, user_level=2, bot_level=1)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('set_title_perm'),
+            bot_perm="群主"
+        ):
             yield event.plain_result(result)
             return
         if not new_title:
-            yield event.plain_result("想要什么头衔？")
+            yield event.plain_result("你又不说给什么头衔")
+            return
         client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
@@ -265,14 +303,17 @@ class AdminPlugin(Star):
 
 
     @filter.command("我要头衔")
-    async def set_group_special_title_me(self, event: AiocqhttpMessageEvent, new_title:str=None):
+    async def set_title_me(self, event: AiocqhttpMessageEvent, new_title:str=None):
         """我要头衔 xxx"""
-        result = await self.perm_block(event, user_level=3, bot_level=1)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('set_title_me_perm'),
+            bot_perm="群主"
+        ):
             yield event.plain_result(result)
             return
         if not new_title:
-            yield event.plain_result("想要什么头衔？")
+            yield event.plain_result("你又不说要什么头衔")
+            return
         client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
@@ -286,15 +327,17 @@ class AdminPlugin(Star):
 
 
     @filter.command("踢了")
-    async def set_group_kick(self, event: AiocqhttpMessageEvent):
+    async def group_kick(self, event: AiocqhttpMessageEvent):
         """踢了@user"""
-        result = await self.perm_block(event, user_level=2, bot_level=2)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('group_kick_perm')
+        ):
             yield event.plain_result(result)
             return
         tids = self.get_ats(event)
         if not tids:
-            yield event.plain_result(f"想踢了谁？")
+            yield event.plain_result(f"你又不说踢了谁")
+            return
         client = event.bot
         group_id = event.get_group_id()
         for tid in tids:
@@ -307,15 +350,17 @@ class AdminPlugin(Star):
 
 
     @filter.command("拉黑")
-    async def set_group_block(self, event: AiocqhttpMessageEvent):
+    async def group_block(self, event: AiocqhttpMessageEvent):
         """拉黑 @user"""
-        result = await self.perm_block(event, user_level=2, bot_level=2)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('group_block_perm')
+        ):
             yield event.plain_result(result)
             return
         tids = self.get_ats(event)
         if not tids:
-            yield event.plain_result(f"想拉黑谁？")
+            yield event.plain_result(f"你又不说拉黑谁")
+            return
         client = event.bot
         group_id = event.get_group_id()
         for tid in tids:
@@ -328,15 +373,18 @@ class AdminPlugin(Star):
 
 
     @filter.command("设置管理员")
-    async def set_group_admin(self, event: AiocqhttpMessageEvent):
+    async def set_admin(self, event: AiocqhttpMessageEvent):
         """设置管理员@user"""
-        result = await self.perm_block(event, user_level=1, bot_level=1)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('set_admin_perm'),
+            bot_perm="群主"
+        ):
             yield event.plain_result(result)
             return
         tids = self.get_ats(event)
         if not tids:
             yield event.plain_result(f"想设置谁为管理员？")
+            return
         client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
@@ -355,15 +403,18 @@ class AdminPlugin(Star):
 
 
     @filter.command("取消管理员")
-    async def cancel_group_admin(self, event: AiocqhttpMessageEvent):
+    async def cancel_admin(self, event: AiocqhttpMessageEvent):
         """取消管理员@user"""
-        result = await self.perm_block(event, user_level=1, bot_level=1)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('cancel_admin_perm'),
+            bot_perm="群主"
+        ):
             yield event.plain_result(result)
             return
         tids = self.get_ats(event)
         if not tids:
             yield event.plain_result(f"想取消谁的管理员身份？")
+            return
         client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
@@ -381,49 +432,71 @@ class AdminPlugin(Star):
             yield event.chain_result(chain)
 
 
-    @filter.command("设精")
-    async def set_essence_msg(self, event: AiocqhttpMessageEvent):
+    @filter.command("设精",alias={"设置群精华"})
+    async def set_essence(self, event: AiocqhttpMessageEvent):
         """将引用消息添加到群精华"""
-        result = await self.perm_block(event, user_level=3, bot_level=2)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('set_essence_perm')
+        ):
             yield event.plain_result(result)
             return
-        messages = event.get_messages()
-        if isinstance(messages[0], Comp.Reply):
+        chain = event.get_messages()
+        first_seg = chain[0]
+        if isinstance(first_seg, Comp.Reply):
             client = event.bot
-            reply_message_id = event.message_obj.message[0].id
-            await client.set_essence_msg(message_id=int(reply_message_id))
-            yield event.plain_result(f'添加了')
+            reply_id = first_seg.id
+            try:
+                await client.set_essence_msg(message_id=int(reply_id))
+                yield event.plain_result(f'设了')
+            except:
+                yield event.plain_result(f'我可设置不了群精华')
 
-    @filter.command("取精")
-    async def cancel_essence_msg(self, event: AiocqhttpMessageEvent):
+
+    @filter.command("取精",alias={"取消群精华"})
+    async def cancel_essence(self, event: AiocqhttpMessageEvent):
         """将引用消息移出群精华"""
-        result = await self.perm_block(event, user_level=3, bot_level=2)
-        if result:
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('cancel_essence_perm')
+        ):
             yield event.plain_result(result)
             return
-        messages = event.get_messages()
-        if isinstance(messages[0], Comp.Reply):
+        chain = event.get_messages()
+        first_seg = chain[0]
+        if isinstance(first_seg, Comp.Reply):
             client = event.bot
-            reply_message_id = event.message_obj.message[0].id
-            await client.delete_essence_msg(message_id=int(reply_message_id))
-            yield event.plain_result(f'取消了')
+            reply_id = first_seg.id
+            try:
+                await client.delete_essence_msg(message_id=int(reply_id))
+                yield event.plain_result(f'取消了')
+            except:
+                yield event.plain_result(f'我可取消不了群精华')
+
 
     @filter.command("撤回")
     async def delete_msg(self, event: AiocqhttpMessageEvent):
         """撤回 引用的消息 和 发送的消息"""
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('delete_msg_perm'),
+            bot_perm= "成员"
+        ):
+            yield event.plain_result(result)
+            return
         chain = event.get_messages()
         first_seg = chain[0]
-        message_id = event.message_obj.message_id
         if isinstance(first_seg, Comp.Reply):
             client = event.bot
-            reply_message_id = first_seg.id
-            await client.delete_msg(message_id=int(reply_message_id))
             try:
+                reply_id = first_seg.id
+                await client.delete_msg(message_id=int(reply_id))
+            except:
+                yield event.plain_result("我可撤回不了这条消息")
+            try:
+                message_id = event.message_obj.message_id
                 await client.delete_msg(message_id=int(message_id))
             except:
                 event.stop_event()
-#
+
+
 
 
 
