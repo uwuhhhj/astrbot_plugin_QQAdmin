@@ -1,8 +1,14 @@
 
 import random
+import textwrap
+from datetime import datetime
+from pathlib import Path
 from typing import Dict
 
+import aiohttp
+
 import astrbot.api.message_components as Comp
+from astrbot import logger
 from astrbot.api.event import filter
 from astrbot.api.star import Context, Star, register
 from astrbot.core import AstrBotConfig
@@ -18,6 +24,9 @@ BAN_ME_QUOTES: list=[
     "好好好，禁了",
     "主人你没事吧？"
 ]
+PLUGIN_DIR = Path(__file__).resolve().parent
+TEMP_DIR = PLUGIN_DIR / 'temp'  # 语音文件保存目录
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @register("astrbot_plugin_QQAdmin", "Zhalslar", "帮助你管理群聊", "1.0.0")
@@ -469,6 +478,20 @@ class AdminPlugin(Star):
             except:
                 yield event.plain_result(f'我可取消不了群精华')
 
+    @filter.command("群精华")
+    async def get_essence_msg_list(self, event: AiocqhttpMessageEvent):
+        """查看群精华"""
+        if result := await self.perm_block(event,
+                user_perm=self.perms.get('get_essence_msg_list_perm')
+        ):
+            yield event.plain_result(result)
+            return
+        client = event.bot
+        group_id = event.get_group_id()
+        essence_data = await client.get_essence_msg_list(group_id=group_id)
+        yield event.plain_result(f"{essence_data}")
+        # TODO 做张好看的图片来展示
+
 
     @filter.command("撤回")
     async def delete_msg(self, event: AiocqhttpMessageEvent):
@@ -496,6 +519,169 @@ class AdminPlugin(Star):
 
 
 
+    @filter.command("设置群头像")
+    async def set_group_portrait(self, event: AiocqhttpMessageEvent):
+        """(引用图片)设置群头像"""
+        if result := await self.perm_block(event,
+                user_perm=self.perms.get('set_group_portrait_perm')
+        ):
+            yield event.plain_result(result)
+            return
+        chain = event.get_messages()
+        img_url = None
+        for seg in chain:
+            if isinstance(seg, Comp.Image):
+                img_url = seg.url
+                break
+            elif isinstance(seg, Comp.Reply):
+                for reply_seg in seg.chain:
+                    if isinstance(reply_seg, Comp.Image):
+                        img_url = reply_seg.url
+                        break
+
+        if not img_url:
+            yield event.plain_result(f"需要引用一张图片")
+            return
+
+        client = event.bot
+        group_id = event.get_group_id()
+        await client.set_group_portrait(group_id=group_id, file=img_url)
+        yield event.plain_result("群头像更新啦>v<")
 
 
 
+    @filter.command("设置群名")
+    async def set_group_name(self, event: AiocqhttpMessageEvent, group_name:str=None):
+        """/设置群名 xxx"""
+        if result := await self.perm_block(event,
+                user_perm=self.perms.get('set_group_name_perm')
+        ):
+            yield event.plain_result(result)
+            return
+        if not group_name:
+            yield event.plain_result(f"你又不说要改成什么群名")
+            return
+
+        client = event.bot
+        group_id = event.get_group_id()
+        await client.set_group_name(group_id=group_id, group_name=group_name)
+        yield event.plain_result("群名更新啦>v<")
+
+
+
+    @filter.command("群友信息")
+    async def get_group_member_list(self, event: AiocqhttpMessageEvent):
+        """查看群友信息"""
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('get_group_member_list_perm')
+        ):
+            yield event.plain_result(result)
+            return
+        client = event.bot
+        group_id = event.get_group_id()
+        members_data = await client.get_group_member_list(group_id=group_id)
+        info_list = [
+            (
+                f"{self.format_join_time(member['join_time'])}："
+                f"【{member['level']}】"
+                f"{member['user_id']}-"
+                f"{member['nickname']}"
+            )
+            for member in members_data
+        ]
+        info_list.sort(key=lambda x: datetime.strptime(x.split('：')[0], '%Y-%m-%d'))
+        info_str = "进群时间：【等级】QQ-昵称\n\n"
+        info_str += '\n\n'.join(info_list)
+        # TODO 做张好看的图片来展示
+        url = await self.text_to_image(info_str)
+        yield event.image_result(url)
+
+
+    @filter.command("发布群公告")
+    async def send_group_notice(self, event: AiocqhttpMessageEvent, content:str=None):
+        """(可引用一张图片)/发布群公告 xxx"""
+        if result := await self.perm_block(event,
+            user_perm=self.perms.get('send_group_notice_perm')
+        ):
+            yield event.plain_result(result)
+            return
+        client = event.bot
+        group_id = event.get_group_id()
+        image_url = ''
+        save_path = ''
+        chain = event.get_messages()
+        for seg in chain:
+            if isinstance(seg, Comp.Image):
+                image_url = seg.url
+                break
+            elif isinstance(seg, Comp.Reply):
+                for reply_seg in seg.chain:
+                    if isinstance(reply_seg, Comp.Image):
+                        image_url = reply_seg.url
+                        break
+        if image_url:
+            image_bytes = await self.download_image(image_url)
+
+            index = len(list(TEMP_DIR.rglob('*.jpg')))
+            save_path = str(TEMP_DIR / f"{index}.jpg")
+            with open(save_path, 'wb') as f:
+                f.write(image_bytes)
+
+        await client._send_group_notice(
+                group_id=group_id,
+                content=content,
+                image=save_path
+        )
+
+
+
+    @filter.command("群公告")
+    async def get_group_notice(self, event: AiocqhttpMessageEvent):
+        """查看群公告"""
+        if result := await self.perm_block(event,
+                user_perm=self.perms.get('get_group_notice_perm')
+        ):
+            yield event.plain_result(result)
+            return
+        client = event.bot
+        group_id = event.get_group_id()
+        notices = await client._get_group_notice(group_id=group_id)
+
+        formatted_messages = []
+        for notice in notices:
+            notice_id = notice['notice_id']
+            sender_id = notice['sender_id']
+            publish_time = datetime.fromtimestamp(notice['publish_time']).strftime('%Y-%m-%d %H:%M:%S')
+            message_text = notice['message']['text'].replace('&#10;', '\n\n')
+
+            formatted_message = (
+                f"【{publish_time}-{sender_id}】\n\n"
+                f"{textwrap.indent(message_text, '    ')}"
+            )
+            formatted_messages.append(formatted_message)
+
+        notices_str = "\n\n\n".join(formatted_messages)
+        url = await self.text_to_image(notices_str)
+        yield event.image_result(url)
+        # TODO 做张好看的图片来展示
+
+
+    @staticmethod
+    def format_join_time(timestamp):
+        """格式化时间戳"""
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
+
+
+    @staticmethod
+    async def download_image(url: str) -> bytes:
+        """下载图片"""
+        url = url.replace("https://", "http://")
+        try:
+            async with aiohttp.ClientSession() as client:
+                response = await client.get(url)
+                img_bytes = await response.read()
+                return img_bytes
+        except Exception as e:
+            logger.error(f"图片下载失败: {e}")
+
+    # TODO 群文件相关操作
