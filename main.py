@@ -571,12 +571,14 @@ class AdminPlugin(Star):
 
     @filter.command("群友信息")
     async def get_group_member_list(self, event: AiocqhttpMessageEvent):
-        """查看群友信息"""
+        """查看群友信息，人数太多时可能会处理失败"""
         if result := await self.perm_block(event,
-            user_perm=self.perms.get('get_group_member_list_perm')
+            user_perm=self.perms.get('get_group_member_list_perm'),
+            bot_perm= "成员"
         ):
             yield event.plain_result(result)
             return
+        yield event.plain_result("获取中...")
         client = event.bot
         group_id = event.get_group_id()
         members_data = await client.get_group_member_list(group_id=group_id)
@@ -639,7 +641,8 @@ class AdminPlugin(Star):
     async def get_group_notice(self, event: AiocqhttpMessageEvent):
         """查看群公告"""
         if result := await self.perm_block(event,
-                user_perm=self.perms.get('get_group_notice_perm')
+            user_perm=self.perms.get('get_group_notice_perm'),
+            bot_perm="成员"
         ):
             yield event.plain_result(result)
             return
