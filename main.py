@@ -39,7 +39,6 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 class AdminPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-        self.print_logo()
         self.superusers: list[str] = config.get("superusers", [])
 
         ban_time_setting: Dict = config.get("ban_time_setting", {})
@@ -50,30 +49,30 @@ class AdminPlugin(Star):
             "ban_rand_time_max", 300
         )  # 随机禁言时的最大时长(秒)
 
-        # 启动后台调度器, 管理宵禁
         self.night_start_time: str = config.get(
             "night_start_time", "23:30"
-        )  # 宵禁开始时间
-        self.night_end_time: str = config.get("night_end_time", "7:00")  # 宵禁结束时间
-        self.night_mode_group: List[str] = config.get(
-            "night_mode_group", []
-        )  # 开启宵禁的群聊
+        )  # 默认的宵禁开始时间
+        self.night_end_time: str = config.get(
+            "night_end_time", "6:00"
+        )  # 默认的宵禁结束时间
 
         self.perms: Dict = config.get("perm_setting", {})  # 权限配置
 
+        if datetime.datetime.today().weekday() == 3:
+            self.print_logo() # 星期四打印 Logo，哈哈哈
 
     def print_logo(self):
         """打印欢迎 Logo"""
         logo = r"""
- ________  __                  __                      __
-/        |/  |                /  |                    /  |
-$$$$$$$$/ $$ |____    ______  $$ |  _______   ______  $$ |  ______
-    /$$/  $$      \  /      \ $$ | /       | /      \ $$ | /      \
-   /$$/   $$$$$$$  | $$$$$$  |$$ |/$$$$$$$/  $$$$$$  |$$ |/$$$$$$  |
-  /$$/    $$ |  $$ | /    $$ |$$ |$$      \  /    $$ |$$ |$$ |  $$/
- /$$/____ $$ |  $$ |/$$$$$$$ |$$ | $$$$$$  |/$$$$$$$ |$$ |$$ |
-/$$      |$$ |  $$ |$$    $$ |$$ |/     $$/ $$    $$ |$$ |$$ |
-$$$$$$$$/ $$/   $$/  $$$$$$$/ $$/ $$$$$$$/   $$$$$$$/ $$/ $$/
+ ________  __                  __            __
+|        \|  \                |  \          |  \
+ \$$$$$$$$| $$____    ______  | $$  _______ | $$  ______    ______
+    /  $$ | $$    \  |      \ | $$ /       \| $$ |      \  /      \
+   /  $$  | $$$$$$$\  \$$$$$$\| $$|  $$$$$$$| $$  \$$$$$$\|  $$$$$$\
+  /  $$   | $$  | $$ /      $$| $$ \$$    \ | $$ /      $$| $$   \$$
+ /  $$___ | $$  | $$|  $$$$$$$| $$ _\$$$$$$\| $$|  $$$$$$$| $$
+|  $$    \| $$  | $$ \$$    $$| $$|       $$| $$ \$$    $$| $$
+ \$$$$$$$$ \$$   \$$  \$$$$$$$ \$$ \$$$$$$$  \$$  \$$$$$$$ \$$
 
         """
         print("\033[92m" + logo + "\033[0m")  # 绿色文字
@@ -690,25 +689,30 @@ $$$$$$$$/ $$/   $$/  $$$$$$$/ $$/ $$$$$$$/   $$$$$$$/ $$/ $$/
         """后台调度器，每 10 秒检查一次宵禁任务条件, 条件满足则执行"""
         client = event.bot
         group_id = event.get_group_id()
+        # 没有传入时间参数时，使用默认的宵禁时间
         start_time = input_start_time or self.night_start_time
         end_time = input_end_time or self.night_end_time
+        # 去除空格等，替换中文冒号为英文冒号
+        start_time = start_time.strip().replace("：", ":")
+        end_time = end_time.strip().replace("：", ":")
+        # 转化为时间对象
         target_start_time = datetime.strptime(start_time, "%H:%M").time()
         target_end_time = datetime.strptime(end_time, "%H:%M").time()
         await client.send_group_msg(
             group_id=int(group_id),
             message=f"已创建宵禁任务：{start_time}~{end_time}",
         )
-        whole_ban_status = False
+        whole_ban_status = False # 全体禁言状态
+        # 进入循环，检查时间
         while True:
             await asyncio.sleep(10)
             current_time = datetime.now().time()
-            # 检查是否在宵禁时间内
             if target_start_time <= current_time <= target_end_time:
                 if whole_ban_status is False:
                     try:
                         await client.send_group_msg(
                             group_id=int(group_id),
-                            message="宵禁开启时间到，全体禁言！",
+                            message="宵禁开启时间到！",
                         )
                         await client.set_group_whole_ban(
                             group_id=int(group_id), enable=True
@@ -723,7 +727,7 @@ $$$$$$$$/ $$/   $$/  $$$$$$$/ $$/ $$$$$$$/   $$$$$$$/ $$/ $$/
                     try:
                         await client.send_group_msg(
                             group_id=int(group_id),
-                            message="宵禁结束时间到，全体禁言解除~",
+                            message="宵禁结束时间到！",
                         )
                         await client.set_group_whole_ban(
                             group_id=int(group_id), enable=False
@@ -733,7 +737,7 @@ $$$$$$$$/ $$/   $$/  $$$$$$$/ $$/ $$$$$$$/   $$$$$$$/ $$/ $$/
                         logger.error(f"解除宵禁失败: {e}")
                         continue
 
-    @staticmethod
-    def parse_time(time_str):
-        """将时间字符串转为 datetime.time 对象"""
-        return datetime.strptime(time_str, "%H:%M").time()
+    @filter.command("取消宵禁")
+    async def cancel_scheduler_loop(self, event: AiocqhttpMessageEvent):
+        """取消宵禁"""
+

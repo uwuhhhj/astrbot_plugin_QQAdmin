@@ -270,6 +270,18 @@
         "type": "int",
         "hint": "单位：秒",
         "default": 300
+      },
+      "night_start_time": {
+        "description": "默认的宵禁开始时间",
+        "type": "string",
+        "hint": "设置宵禁时，不指定开始时间时使用默认值，格式为HH:mm",
+        "default": "23:30"
+      },
+      "night_end_time": {
+        "description": "默认的宵禁结束时间",
+        "type": "string",
+        "hint": "设置宵禁时，不指定结束时间时使用默认值，格式为HH:mm",
+        "default": "6:00"
       }
     }
   }
