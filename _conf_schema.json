@@ -3,7 +3,9 @@
     "description": "超级管理员",
     "type": "list",
     "hint": "提供单独设置的超级管理员列表，拥有最高权限",
-    "default": ["2936169201"]
+    "default": [
+      "2936169201"
+    ]
   },
   "perm_setting": {
     "description": "命令权限设置",
@@ -251,11 +253,33 @@
           "成员"
         ],
         "default": "成员"
+      },
+      "start_scheduler_loop_perm": {
+        "description": "开启宵禁",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "stop_scheduler_loop_perm": {
+        "description": "关闭宵禁",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
       }
     }
   },
   "ban_time_setting": {
-    "description": "随机禁言设置",
+    "description": "随机禁言配置",
     "type": "object",
     "hint": "若禁言命令未指定禁言时长，则使用随机时长，时长范围如下",
     "items": {
@@ -270,7 +294,14 @@
         "type": "int",
         "hint": "单位：秒",
         "default": 300
-      },
+      }
+    }
+  },
+  "night_ban_config": {
+    "description": "宵禁配置",
+    "type": "object",
+    "hint": "若禁言命令未指定禁言时长，则使用随机时长，时长范围如下",
+    "items": {
       "night_start_time": {
         "description": "默认的宵禁开始时间",
         "type": "string",
@@ -282,6 +313,34 @@
         "type": "string",
         "hint": "设置宵禁时，不指定结束时间时使用默认值，格式为HH:mm",
         "default": "6:00"
+      }
+    }
+  },
+  "forbidden_config": {
+    "description": "违禁词配置",
+    "type": "object",
+    "hint": "若禁言命令未指定禁言时长，则使用随机时长，时长范围如下",
+    "items": {
+      "forbidden_words": {
+        "description": "违禁词",
+        "type": "list",
+        "hint": "包含关键词的消息将被撤回，并禁言发送者",
+        "default": [
+          "傻逼",
+          "傻屌"
+        ]
+      },
+      "forbidden_words_group": {
+        "description": "检测违禁词的群聊白名单",
+        "type": "list",
+        "hint": "仅检测白名单的群聊，其他群聊不检测",
+        "default": []
+      },
+      "forbidden_words_ban_time": {
+        "description": "违禁词禁言时长",
+        "type": "int",
+        "hint": "触发违禁词是禁言发送者，单位：秒，设置为0表示不禁言",
+        "default": 60
       }
     }
   }

@@ -13,6 +13,7 @@ from astrbot.core import AstrBotConfig
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
     AiocqhttpMessageEvent,
 )
+from astrbot.core.star.filter.event_message_type import EventMessageType
 
 
 BAN_ME_QUOTES: List[str] = [
@@ -39,7 +40,12 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 class AdminPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
+
+        # 超级管理员列表
         self.superusers: list[str] = config.get("superusers", [])
+
+        # 权限配置
+        self.perms: Dict = config.get("perm_setting", {})
 
         ban_time_setting: Dict = config.get("ban_time_setting", {})
         self.ban_rand_time_min: int = ban_time_setting.get(
@@ -49,16 +55,25 @@ class AdminPlugin(Star):
             "ban_rand_time_max", 300
         )  # 随机禁言时的最大时长(秒)
 
-        self.night_start_time: str = config.get(
+        night_ban_config = config.get("night_ban_config", {})
+        self.night_start_time: str = night_ban_config.get(
             "night_start_time", "23:30"
         )  # 默认的宵禁开始时间
-        self.night_end_time: str = config.get(
+        self.night_end_time: str = night_ban_config.get(
             "night_end_time", "6:00"
         )  # 默认的宵禁结束时间
 
+        forbidden_config = config.get("forbidden_config", {})
+        self.forbidden_words: List[str] = forbidden_config.get(
+            "forbidden_words", []
+        )  # 违禁词列表
+        self.forbidden_words_group: List[str] = forbidden_config.get(
+            "forbidden_words_group", []
+        )  # 检测违禁词的群聊
+        self.forbidden_words_ban_time: int = forbidden_config.get(
+            "forbidden_words_ban_time", 60
+        )  # 违禁词禁言时长(秒)
         self.scheduler_tasks = {}  # 用于存储每个群组的任务引用
-
-        self.perms: Dict = config.get("perm_setting", {})  # 权限配置
 
         if datetime.today().weekday() == 3:
             self.print_logo()  # 星期四打印 Logo，哈哈哈
@@ -79,8 +94,6 @@ class AdminPlugin(Star):
         """
         print("\033[92m" + logo + "\033[0m")  # 绿色文字
         print("\033[94m欢迎使用群管插件！\033[0m")  # 蓝色文字
-
-
 
     @staticmethod
     async def get_nickname(event: AiocqhttpMessageEvent, user_id) -> str:
@@ -398,8 +411,11 @@ class AdminPlugin(Star):
         if result := await self.perm_block(
             event, user_perm=self.perms.get("set_admin_perm"), bot_perm="群主"
         ):
-            yield event.plain_result(result)
-            return
+            if result == "我动不了这人":
+                yield event.plain_result("哇，尊贵的超管大人！我将越权为您服务！")
+            else:
+                yield event.plain_result(result)
+                return
         tids = self.get_ats(event)
         if not tids:
             yield event.plain_result("想设置谁为管理员？")
@@ -421,8 +437,11 @@ class AdminPlugin(Star):
         if result := await self.perm_block(
             event, user_perm=self.perms.get("cancel_admin_perm"), bot_perm="群主"
         ):
-            yield event.plain_result(result)
-            return
+            if result == "我动不了这人":
+                yield event.plain_result("哇，尊贵的超管大人！我将越权为您服务！")
+            else:
+                yield event.plain_result(result)
+                return
         tids = self.get_ats(event)
         if not tids:
             yield event.plain_result("想取消谁的管理员身份？")
@@ -514,6 +533,40 @@ class AdminPlugin(Star):
                 await client.delete_msg(message_id=int(message_id))
             except:  # noqa: E722
                 event.stop_event()
+
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    async def check_forbidden_words(self, event: AiocqhttpMessageEvent):
+        """
+        自动检测违禁词，并撤回消息，禁言发送者，注意要给bot设置管理员权限
+        """
+        group_id = event.get_group_id()
+        # 如果群聊不在检测列表中，则不进行检测
+        if group_id not in self.forbidden_words_group:
+            return
+        # 检测违禁词
+        for word in self.forbidden_words:
+            message_str = event.get_message_str()
+            if word in message_str:
+                yield event.plain_result("你的消息包含有违禁词！")
+                client = event.bot
+                # 撤回消息
+                try:
+                    message_id = event.message_obj.message_id
+                    await client.delete_msg(message_id=int(message_id))
+                except:  # noqa: E722
+                    pass
+                # 禁言发送者
+                if self.forbidden_words_ban_time > 0:
+                    send_id = event.get_sender_id()
+                    try:
+                        await client.set_group_ban(
+                            group_id=int(group_id),
+                            user_id=int(send_id),
+                            duration=self.forbidden_words_ban_time,
+                        )
+                    except:  # noqa: E722
+                        pass
+                break
 
     @filter.command("设置群头像")
     async def set_group_portrait(self, event: AiocqhttpMessageEvent):
@@ -733,6 +786,11 @@ class AdminPlugin(Star):
         input_end_time: str | None = None,
     ):
         """开启宵禁任务，可设置开启时间和结束时间，重启bot后宵禁任务会被清除"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("start_scheduler_loop_perm")
+        ):
+            yield event.plain_result(result)
+            return
         client = event.bot
         group_id = event.get_group_id()
 
@@ -763,9 +821,15 @@ class AdminPlugin(Star):
         )
         yield event.plain_result(f"已创建宵禁任务：{start_time}~{end_time}")
 
+
     @filter.command("关闭宵禁")
-    async def cancel_scheduler_loop(self, event: AiocqhttpMessageEvent):
+    async def stop_scheduler_loop(self, event: AiocqhttpMessageEvent):
         """取消宵禁任务"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("stop_scheduler_loop_perm")
+        ):
+            yield event.plain_result(result)
+            return
         group_id = event.get_group_id()
         if group_id in self.scheduler_tasks and self.scheduler_tasks[group_id]:
             self.scheduler_tasks[group_id].cancel()  # 取消后台任务
