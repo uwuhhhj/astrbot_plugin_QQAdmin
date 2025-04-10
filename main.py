@@ -56,10 +56,12 @@ class AdminPlugin(Star):
             "night_end_time", "6:00"
         )  # 默认的宵禁结束时间
 
+        self.scheduler_tasks = {}  # 用于存储每个群组的任务引用
+
         self.perms: Dict = config.get("perm_setting", {})  # 权限配置
 
-        if datetime.datetime.today().weekday() == 3:
-            self.print_logo() # 星期四打印 Logo，哈哈哈
+        if datetime.today().weekday() == 3:
+            self.print_logo()  # 星期四打印 Logo，哈哈哈
 
     def print_logo(self):
         """打印欢迎 Logo"""
@@ -77,6 +79,7 @@ class AdminPlugin(Star):
         """
         print("\033[92m" + logo + "\033[0m")  # 绿色文字
         print("\033[94m欢迎使用群管插件！\033[0m")  # 蓝色文字
+
 
 
     @staticmethod
@@ -679,30 +682,15 @@ class AdminPlugin(Star):
         except Exception as e:
             logger.error(f"图片下载失败: {e}")
 
-    @filter.command("设置宵禁")
     async def scheduler_loop(
         self,
-        event: AiocqhttpMessageEvent,
-        input_start_time: str | None = None,
-        input_end_time: str | None = None,
+        client,
+        group_id,
+        target_start_time,
+        target_end_time,
     ):
         """后台调度器，每 10 秒检查一次宵禁任务条件, 条件满足则执行"""
-        client = event.bot
-        group_id = event.get_group_id()
-        # 没有传入时间参数时，使用默认的宵禁时间
-        start_time = input_start_time or self.night_start_time
-        end_time = input_end_time or self.night_end_time
-        # 去除空格等，替换中文冒号为英文冒号
-        start_time = start_time.strip().replace("：", ":")
-        end_time = end_time.strip().replace("：", ":")
-        # 转化为时间对象
-        target_start_time = datetime.strptime(start_time, "%H:%M").time()
-        target_end_time = datetime.strptime(end_time, "%H:%M").time()
-        await client.send_group_msg(
-            group_id=int(group_id),
-            message=f"已创建宵禁任务：{start_time}~{end_time}",
-        )
-        whole_ban_status = False # 全体禁言状态
+        whole_ban_status = False  # 全体禁言状态
         # 进入循环，检查时间
         while True:
             await asyncio.sleep(10)
@@ -712,14 +700,14 @@ class AdminPlugin(Star):
                     try:
                         await client.send_group_msg(
                             group_id=int(group_id),
-                            message="宵禁开启时间到！",
+                            message=f"【{target_start_time}】本群宵禁开始！",
                         )
                         await client.set_group_whole_ban(
                             group_id=int(group_id), enable=True
                         )
                         whole_ban_status = True
                     except Exception as e:
-                        logger.error(f"开启宵禁失败: {e}")
+                        logger.error(f"群聊{group_id}的宵禁开启失败: {e}")
                         continue
 
             else:
@@ -727,17 +715,66 @@ class AdminPlugin(Star):
                     try:
                         await client.send_group_msg(
                             group_id=int(group_id),
-                            message="宵禁结束时间到！",
+                            message=f"【{target_end_time}】本群宵禁结束！",
                         )
                         await client.set_group_whole_ban(
                             group_id=int(group_id), enable=False
                         )
                         whole_ban_status = False
                     except Exception as e:
-                        logger.error(f"解除宵禁失败: {e}")
+                        logger.error(f"群聊{group_id}的宵禁解除失败: {e}")
                         continue
 
-    @filter.command("取消宵禁")
-    async def cancel_scheduler_loop(self, event: AiocqhttpMessageEvent):
-        """取消宵禁"""
+    @filter.command("开启宵禁", alias={"设置宵禁"})
+    async def start_scheduler_loop(
+        self,
+        event: AiocqhttpMessageEvent,
+        input_start_time: str | None = None,
+        input_end_time: str | None = None,
+    ):
+        """开启宵禁任务，可设置开启时间和结束时间，重启bot后宵禁任务会被清除"""
+        client = event.bot
+        group_id = event.get_group_id()
 
+        # 没有传入时间参数时，使用默认的宵禁时间
+        start_time = input_start_time or self.night_start_time
+        end_time = input_end_time or self.night_end_time
+
+        # 去除空格等，替换中文冒号为英文冒号
+        start_time = start_time.strip().replace("：", ":")
+        end_time = end_time.strip().replace("：", ":")
+
+        # 转化为时间对象
+        target_start_time = datetime.strptime(start_time, "%H:%M").time()
+        target_end_time = datetime.strptime(end_time, "%H:%M").time()
+
+        group_id = event.get_group_id()
+        if group_id in self.scheduler_tasks and self.scheduler_tasks[group_id]:
+            yield event.plain_result("本群已有宵禁任务在运行！")
+
+        # 启动后台任务并保存引用
+        self.scheduler_tasks[group_id] = asyncio.create_task(
+            self.scheduler_loop(
+                client=client,
+                group_id=group_id,
+                target_start_time=target_start_time,
+                target_end_time=target_end_time,
+            )
+        )
+        yield event.plain_result(f"已创建宵禁任务：{start_time}~{end_time}")
+
+    @filter.command("关闭宵禁")
+    async def cancel_scheduler_loop(self, event: AiocqhttpMessageEvent):
+        """取消宵禁任务"""
+        group_id = event.get_group_id()
+        if group_id in self.scheduler_tasks and self.scheduler_tasks[group_id]:
+            self.scheduler_tasks[group_id].cancel()  # 取消后台任务
+            try:
+                await self.scheduler_tasks[group_id]
+            except asyncio.CancelledError:
+                pass  # 忽略取消任务时的异常
+            yield event.plain_result("本群的宵禁已取消")
+            self.scheduler_tasks[group_id] = None  # 清理任务引用
+        else:
+            yield event.plain_result("本群没有宵禁任务在运行")
+        event.stop_event()
