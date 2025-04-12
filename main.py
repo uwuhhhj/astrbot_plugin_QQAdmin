@@ -165,12 +165,12 @@ class AdminPlugin(Star):
         user_level_now = await self.get_perm_level(event, user_id=sender_id)
         at_ids = self.get_ats(event)
 
-        if user_level_now < user_level:
+        if user_level_now > user_level:
             return "你没这权限"
 
         # 检查bot的权限等级
         bot_level_now = await self.get_perm_level(event, user_id=self_id)
-        if bot_level_now < bot_level:
+        if bot_level_now > bot_level:
             return "我可没这权限"
 
         # 获取被at者的权限等级
