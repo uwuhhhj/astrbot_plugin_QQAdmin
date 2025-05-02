@@ -275,8 +275,36 @@
           "成员"
         ],
         "default": "管理员"
+      },
+      "add_group_keyword_perm": {
+        "description": "添加/删除进群关键词",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "add_group_approve_perm": {
+        "description": "批准/不批准",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
       }
     }
+  },
+  "accept_keywords_list": {
+    "description": "进群关键词数据",
+    "type": "list",
+    "hint": "当用户进群时，会检查其消息是否包含关键词，若包含则会自动批准进群",
+    "default": []
   },
   "ban_time_setting": {
     "description": "随机禁言配置",

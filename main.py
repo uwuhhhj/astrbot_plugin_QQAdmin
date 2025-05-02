@@ -34,13 +34,13 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.0.1",
+    "2.0.6",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-
+        self.config = config
         # 超级管理员列表
         self.superusers: list[str] = config.get("superusers", [])
 
@@ -74,6 +74,13 @@ class AdminPlugin(Star):
             "forbidden_words_ban_time", 60
         )  # 违禁词禁言时长(秒)
         self.scheduler_tasks = {}  # 用于存储每个群组的任务引用
+
+        self.accept_keywords_list: List[dict[str, list[str]]] = config.get(
+            "accept_keywords_list", [{}]
+        )
+        self.accept_keywords: dict[str, list[str]] = (
+            self.accept_keywords_list[0] if self.accept_keywords_list else {}
+        )
 
         if datetime.today().weekday() == 3:
             self.print_logo()  # 星期四打印 Logo，哈哈哈
@@ -131,7 +138,6 @@ class AdminPlugin(Star):
         role = all_info.get("role", "unknown")
         role_to_level: Dict[str, int] = {"owner": 1, "admin": 2, "member": 3}
         level = role_to_level.get(role, 4)  # 默认值4，适用于未知角色
-        print(f"当前用户权限等级：{level}")
         return level
 
     @staticmethod
@@ -842,3 +848,160 @@ class AdminPlugin(Star):
         else:
             yield event.plain_result("本群没有宵禁任务在运行")
         event.stop_event()
+
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def event_monitoring(self, event: AiocqhttpMessageEvent):
+        """监听进群事件"""
+        client = event.bot
+        if not hasattr(event, "message_obj") or not hasattr(
+            event.message_obj, "raw_message"
+        ):
+            return
+        raw_message = event.message_obj.raw_message
+        # 处理 raw_message
+        if not raw_message or not isinstance(raw_message, dict):
+            return
+        # 确保是 request 类型的消息
+        if raw_message.get("post_type") != "request":
+            return
+        # 确保是群邀请事件
+        if not (
+            raw_message.get("request_type") == "group"
+            and raw_message.get("sub_type") == "add"
+        ):
+            return
+        # 提取信息
+        user_id = raw_message.get("user_id", "")
+        comment = raw_message.get("comment") or "无"
+        flag = raw_message.get("flag", "")
+        nickname = (await client.get_stranger_info(user_id=int(user_id)))[
+            "nickname"
+        ] or "未知昵称"
+        # 通知群友
+        notice = (
+            f"【收到进群申请】批准吗："
+            f"\n昵称：{nickname}"
+            f"\nQQ：{user_id}"
+            f"\nflag：{flag}"
+            f"\n验证信息：{comment}"
+        )
+        yield event.plain_result(notice)
+        # 自动批准
+        if self.accept_keywords:
+            group_id = event.get_group_id()
+            for keyword in self.accept_keywords.get(group_id, []):
+                if keyword.lower() in comment.lower():
+                    await client.set_group_add_request(
+                        flag=flag, sub_type="add", approve=True
+                    )
+                    yield event.plain_result("验证通过，已自动批准进群")
+                    return
+        # 自动拒绝 (懒得做了，用不到的)
+
+    @filter.command("添加进群关键词")
+    async def add_accept_keyword(self, event: AiocqhttpMessageEvent, keywords_str: str):
+        """添加自动批准进群的关键词"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("add_group_keyword_perm"), bot_perm="管理员"
+        ):
+            yield event.plain_result(result)
+            return
+        keywords = keywords_str.strip().replace("，", ",").split(",")
+        group_id = event.get_group_id()
+        self.accept_keywords.setdefault(group_id, []).extend(keywords)
+        self.config["accept_keywords_list"] = [self.accept_keywords]
+        self.config.save_config()
+        yield event.plain_result(f"新增进群关键词：{keywords}")
+
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.command("删除进群关键词")
+    async def remove_accept_keyword(
+        self, event: AiocqhttpMessageEvent, keywords_str: str
+    ):
+        """删除自动批准进群的关键词"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("add_group_keyword_perm"), bot_perm="管理员"
+        ):
+            yield event.plain_result(result)
+            return
+        keywords = keywords_str.strip().replace("，", ",").split(",")
+        group_id = event.get_group_id()
+        if group_id not in self.accept_keywords:
+            yield event.plain_result("本群没有设置进群关键词")
+            return
+        for keyword in keywords:
+            group_accept_keywords = self.accept_keywords[group_id]
+            if keyword in group_accept_keywords:
+                group_accept_keywords.remove(keyword)
+                print(self.accept_keywords)
+                self.config["accept_keywords_list"] = [self.accept_keywords]
+                self.config.save_config()
+        yield event.plain_result(f"已删进群关键词：{keywords}")
+
+    @filter.command("查看进群关键词")
+    async def view_accept_keywords(self, event: AiocqhttpMessageEvent):
+        """查看自动批准进群的关键词"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("add_group_keyword_perm"), bot_perm="管理员"
+        ):
+            yield event.plain_result(result)
+            return
+        group_id = event.get_group_id()
+        if group_id not in self.accept_keywords:
+            yield event.plain_result("本群没有设置进群关键词")
+            return
+        yield event.plain_result(f"本群的进群关键词：{self.accept_keywords[group_id]}")
+
+    @filter.command("同意")
+    async def agree(self, event: AiocqhttpMessageEvent, extra: str = ""):
+        """同意申请者进群"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("add_group_approve_perm"), bot_perm="管理员"
+        ):
+            yield event.plain_result(result)
+            return
+        reply = await self.approve(event=event, extra=extra, approve=True)
+        if reply:
+            yield event.plain_result(reply)
+
+    @filter.command("拒绝", alias={"不同意"})
+    async def refuse(self, event: AiocqhttpMessageEvent, extra: str = ""):
+        """拒绝申请者进群"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("add_group_approve_perm"), bot_perm="管理员"
+        ):
+            yield event.plain_result(result)
+            return
+        reply = await self.approve(event=event, extra=extra, approve=False)
+        if reply:
+            yield event.plain_result(reply)
+
+    @staticmethod
+    async def approve(
+        event: AiocqhttpMessageEvent, extra: str = "", approve: bool = True
+    ) -> str | None:
+        """处理进群申请"""
+        text = ""
+        chain = event.get_messages()
+        reply_seg = next((seg for seg in chain if isinstance(seg, Comp.Reply)), None)
+        if reply_seg and reply_seg.chain:
+            for seg in reply_seg.chain:
+                if isinstance(seg, Comp.Plain):
+                    text = seg.text
+        lines = text.split("\n")
+        if "【收到进群申请】" in text and len(lines) >= 5:
+            nickname = lines[1].split("：")[1]  # 第2行冒号后文本为nickname
+            flag = lines[3].split("：")[1]  # 第4行冒号后文本为flag
+            try:
+                await event.bot.set_group_add_request(
+                    flag=flag, sub_type="add", approve=approve, reason=extra
+                )
+                if approve:
+                    reply = f"已同意{nickname}进群"
+                else:
+                    reply = f"已拒绝{nickname}进群" + (
+                        f"\n理由：{extra}" if extra else ""
+                    )
+                return reply
+            except:  # noqa: E722
+                return "这条申请处理过了或者格式不对"
