@@ -37,7 +37,7 @@ git clone https://github.com/Zhalslar/astrbot_plugin_QQAdmin
 ## ⌨️ 使用说明
 
 群管功能丰富，指令繁多，可以发送“/群管帮助”命令来查看具体用法。
-# 群管插件命令表
+### 群管插件命令表
 
 | 命令 | 功能描述 |
 |------|----------|
@@ -109,5 +109,5 @@ git clone https://github.com/Zhalslar/astrbot_plugin_QQAdmin
 - [x] 发布群公告、删除群公告
 - [x] 定时宵禁
 - [x] 违禁词撤回并禁言
-- [ ] 进群审批
-- [ ] 群文件管理
+- [x] 进群审批
+- [ ] 群文件管理（打算另起一个插件来写，尽请期待）
