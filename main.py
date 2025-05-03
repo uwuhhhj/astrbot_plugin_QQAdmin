@@ -41,8 +41,9 @@ class AdminPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        # 超级管理员列表
+        # 额外超级管理员列表
         self.superusers: list[str] = config.get("superusers", [])
+        self.superusers.extend(context.get_config()["admins_id"])
 
         # 权限配置
         self.perms: Dict = config.get("perm_setting", {})
@@ -858,7 +859,9 @@ class AdminPlugin(Star):
     async def add_accept_keyword(self, event: AiocqhttpMessageEvent, keywords_str: str):
         """添加自动批准进群的关键词"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("add_accept_keyword_perm"), bot_perm="管理员"
+            event,
+            user_perm=self.perms.get("add_accept_keyword_perm"),
+            bot_perm="管理员",
         ):
             yield event.plain_result(result)
             return
@@ -875,7 +878,9 @@ class AdminPlugin(Star):
     ):
         """删除自动批准进群的关键词"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("remove_accept_keyword_perm"), bot_perm="管理员"
+            event,
+            user_perm=self.perms.get("remove_accept_keyword_perm"),
+            bot_perm="管理员",
         ):
             yield event.plain_result(result)
             return
@@ -888,7 +893,6 @@ class AdminPlugin(Star):
             group_accept_keywords = self.accept_keywords[group_id]
             if keyword in group_accept_keywords:
                 group_accept_keywords.remove(keyword)
-                print(self.accept_keywords)
                 self.config["accept_keywords_list"] = [self.accept_keywords]
                 self.config.save_config()
         yield event.plain_result(f"已删进群关键词：{keywords}")
@@ -897,7 +901,59 @@ class AdminPlugin(Star):
     async def view_accept_keywords(self, event: AiocqhttpMessageEvent):
         """查看自动批准进群的关键词"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("view_accept_keywords_perm"), bot_perm="成员"
+            event,
+            user_perm=self.perms.get("view_accept_keywords_perm"),
+            bot_perm="成员",
+        ):
+            yield event.plain_result(result)
+            return
+        group_id = event.get_group_id()
+        if group_id not in self.accept_keywords:
+            yield event.plain_result("本群没有设置进群关键词")
+            return
+        yield event.plain_result(f"本群的进群关键词：{self.accept_keywords[group_id]}")
+
+    @filter.command("添加进群黑名单")
+    async def add_reject_ids(self, event: AiocqhttpMessageEvent, ids_str: str | int):
+        """添加指定ID到进群黑名单"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("add_reject_ids_perm"), bot_perm="管理员"
+        ):
+            yield event.plain_result(result)
+            return
+        reject_ids = str(ids_str).strip().replace("，", ",").split(",")
+        group_id = event.get_group_id()
+        self.reject_ids.setdefault(group_id, []).extend(reject_ids)
+        self.config["reject_ids_list"] = [self.reject_ids]
+        self.config.save_config()
+        yield event.plain_result(f"进群黑名单新增ID：{reject_ids}")
+
+    @filter.command("删除进群黑名单")
+    async def remove_reject_ids(self, event: AiocqhttpMessageEvent, ids_str: str | int):
+        """从进群黑名单中删除指定ID"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("remove_reject_ids_perm"), bot_perm="管理员"
+        ):
+            yield event.plain_result(result)
+            return
+        reject_ids = str(ids_str).strip().replace("，", ",").split(",")
+        group_id = event.get_group_id()
+        if group_id not in self.reject_ids:
+            yield event.plain_result("本群没有设置进群黑名单")
+            return
+        for uid in reject_ids:
+            group_reject_ids = self.reject_ids[group_id]
+            if uid in group_reject_ids:
+                group_reject_ids.remove(uid)
+                self.config["reject_ids_list"] = [self.reject_ids]
+                self.config.save_config()
+        yield event.plain_result(f"已从进群黑名单中删除ID：{reject_ids}")
+
+    @filter.command("查看进群黑名单")
+    async def view_reject_ids(self, event: AiocqhttpMessageEvent):
+        """查看进群黑名单"""
+        if result := await self.perm_block(
+            event, user_perm=self.perms.get("view_reject_ids_perm"), bot_perm="成员"
         ):
             yield event.plain_result(result)
             return
@@ -1033,6 +1089,47 @@ class AdminPlugin(Star):
                 return reply
             except:  # noqa: E722
                 return "这条申请处理过了或者格式不对"
+
+    @filter.command("群管帮助")
+    async def help(self, event: AiocqhttpMessageEvent):
+        """查看群管帮助"""
+        help_text = help_text = (
+            "【群管帮助】：\n\n"
+            "/禁言 <时长> @<用户> - 禁言指定用户，时长单位为秒，不填时长则随机禁言\n\n"
+            "/禁我 <时长> - 自己禁言自己，时长单位为秒，不填时长则随机禁言\n\n"
+            "/解禁 @<用户> - 解除指定用户的禁言\n\n"
+            "/全体禁言 - 开启全体禁言\n\n"
+            "/解除全体禁言 - 解除全体禁言\n\n"
+            "/改名 <新昵称> @<用户> - 修改指定用户的群昵称，不指定用户则修改自己\n\n"
+            "/改我 <新昵称> - 修改自己的群昵称\n\n"
+            "/头衔 <新头衔> @<用户> - 设置指定用户的群头衔，不指定用户则设置自己\n\n"
+            "/我要头衔 <新头衔> - 设置自己的群头衔\n\n"
+            "/踢了 @<用户> - 将指定用户踢出群聊\n\n"
+            "/拉黑 @<用户> - 将指定用户踢出群聊并拉黑\n\n"
+            "/设置管理员 @<用户> - 设置指定用户为管理员\n\n"
+            "/取消管理员 @<用户> - 取消指定用户的管理员身份\n\n"
+            "/设精 - 将引用的消息设置为群精华\n\n"
+            "/取精 - 将引用的消息移出群精华\n\n"
+            "/群精华 - 查看群精华消息列表\n\n"
+            "/撤回 - 撤回引用的消息和自己发送的消息\n\n"
+            "/设置群头像 - 引用图片设置群头像\n\n"
+            "/设置群名 <新群名> - 修改群名称\n\n"
+            "/群友信息 - 查看群成员信息\n\n"
+            "/发布群公告 <内容> - 发布群公告，可引用图片\n\n"
+            "/群公告 - 查看群公告\n\n"
+            "/开启宵禁 <开始时间> <结束时间> - 设置并开启宵禁任务，时间格式为24小时制的HH:MM，默认时间为23:30到6:00\n\n"
+            "/关闭宵禁 - 关闭当前群的宵禁任务\n\n"
+            "/添加进群关键词 <关键词> - 添加自动批准进群的关键词，多个关键词用逗号分隔\n\n"
+            "/删除进群关键词 <关键词> - 删除自动批准进群的关键词\n\n"
+            "/查看进群关键词 - 查看当前群的自动批准进群关键词\n\n"
+            "/添加进群黑名单 <QQ号> - 添加进群黑名单，多个QQ号用逗号分隔\n\n"
+            "/删除进群黑名单 <QQ号> - 从进群黑名单中删除指定QQ号\n\n"
+            "/查看进群黑名单 - 查看当前群的进群黑名单\n\n"
+            "/同意 - 同意引用的进群申请\n\n"
+            "/拒绝 <理由> - 拒绝引用的进群申请，可附带拒绝理由\n\n"
+        )
+        url = await self.text_to_image(help_text)
+        yield event.image_result(url)
 
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
