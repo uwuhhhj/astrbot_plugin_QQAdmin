@@ -34,7 +34,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.0.6",
+    "2.0.7",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
@@ -80,6 +80,12 @@ class AdminPlugin(Star):
         )
         self.accept_keywords: dict[str, list[str]] = (
             self.accept_keywords_list[0] if self.accept_keywords_list else {}
+        )
+        self.reject_ids_list: List[dict[str, list[str]]] = config.get(
+            "reject_ids_list", [{}]
+        )
+        self.reject_ids: dict[str, list[str]] = (
+            self.reject_ids_list[0] if self.reject_ids_list else {}
         )
 
         if datetime.today().weekday() == 3:
@@ -827,7 +833,6 @@ class AdminPlugin(Star):
         )
         yield event.plain_result(f"已创建宵禁任务：{start_time}~{end_time}")
 
-
     @filter.command("关闭宵禁")
     async def stop_scheduler_loop(self, event: AiocqhttpMessageEvent):
         """取消宵禁任务"""
@@ -849,60 +854,11 @@ class AdminPlugin(Star):
             yield event.plain_result("本群没有宵禁任务在运行")
         event.stop_event()
 
-    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
-    async def event_monitoring(self, event: AiocqhttpMessageEvent):
-        """监听进群事件"""
-        client = event.bot
-        if not hasattr(event, "message_obj") or not hasattr(
-            event.message_obj, "raw_message"
-        ):
-            return
-        raw_message = event.message_obj.raw_message
-        # 处理 raw_message
-        if not raw_message or not isinstance(raw_message, dict):
-            return
-        # 确保是 request 类型的消息
-        if raw_message.get("post_type") != "request":
-            return
-        # 确保是群邀请事件
-        if not (
-            raw_message.get("request_type") == "group"
-            and raw_message.get("sub_type") == "add"
-        ):
-            return
-        # 提取信息
-        user_id = raw_message.get("user_id", "")
-        comment = raw_message.get("comment") or "无"
-        flag = raw_message.get("flag", "")
-        nickname = (await client.get_stranger_info(user_id=int(user_id)))[
-            "nickname"
-        ] or "未知昵称"
-        # 通知群友
-        notice = (
-            f"【收到进群申请】批准吗："
-            f"\n昵称：{nickname}"
-            f"\nQQ：{user_id}"
-            f"\nflag：{flag}"
-            f"\n验证信息：{comment}"
-        )
-        yield event.plain_result(notice)
-        # 自动批准
-        if self.accept_keywords:
-            group_id = event.get_group_id()
-            for keyword in self.accept_keywords.get(group_id, []):
-                if keyword.lower() in comment.lower():
-                    await client.set_group_add_request(
-                        flag=flag, sub_type="add", approve=True
-                    )
-                    yield event.plain_result("验证通过，已自动批准进群")
-                    return
-        # 自动拒绝 (懒得做了，用不到的)
-
     @filter.command("添加进群关键词")
     async def add_accept_keyword(self, event: AiocqhttpMessageEvent, keywords_str: str):
         """添加自动批准进群的关键词"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("add_group_keyword_perm"), bot_perm="管理员"
+            event, user_perm=self.perms.get("add_accept_keyword_perm"), bot_perm="管理员"
         ):
             yield event.plain_result(result)
             return
@@ -913,14 +869,13 @@ class AdminPlugin(Star):
         self.config.save_config()
         yield event.plain_result(f"新增进群关键词：{keywords}")
 
-    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("删除进群关键词")
     async def remove_accept_keyword(
         self, event: AiocqhttpMessageEvent, keywords_str: str
     ):
         """删除自动批准进群的关键词"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("add_group_keyword_perm"), bot_perm="管理员"
+            event, user_perm=self.perms.get("remove_accept_keyword_perm"), bot_perm="管理员"
         ):
             yield event.plain_result(result)
             return
@@ -942,7 +897,7 @@ class AdminPlugin(Star):
     async def view_accept_keywords(self, event: AiocqhttpMessageEvent):
         """查看自动批准进群的关键词"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("add_group_keyword_perm"), bot_perm="管理员"
+            event, user_perm=self.perms.get("view_accept_keywords_perm"), bot_perm="成员"
         ):
             yield event.plain_result(result)
             return
@@ -953,10 +908,10 @@ class AdminPlugin(Star):
         yield event.plain_result(f"本群的进群关键词：{self.accept_keywords[group_id]}")
 
     @filter.command("同意")
-    async def agree(self, event: AiocqhttpMessageEvent, extra: str = ""):
+    async def agree_add_group(self, event: AiocqhttpMessageEvent, extra: str = ""):
         """同意申请者进群"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("add_group_approve_perm"), bot_perm="管理员"
+            event, user_perm=self.perms.get("agree_add_group_perm"), bot_perm="管理员"
         ):
             yield event.plain_result(result)
             return
@@ -965,16 +920,89 @@ class AdminPlugin(Star):
             yield event.plain_result(reply)
 
     @filter.command("拒绝", alias={"不同意"})
-    async def refuse(self, event: AiocqhttpMessageEvent, extra: str = ""):
+    async def refuse_add_group(self, event: AiocqhttpMessageEvent, extra: str = ""):
         """拒绝申请者进群"""
         if result := await self.perm_block(
-            event, user_perm=self.perms.get("add_group_approve_perm"), bot_perm="管理员"
+            event, user_perm=self.perms.get("refuse_add_group_perm"), bot_perm="管理员"
         ):
             yield event.plain_result(result)
             return
         reply = await self.approve(event=event, extra=extra, approve=False)
         if reply:
             yield event.plain_result(reply)
+
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    async def event_monitoring(self, event: AiocqhttpMessageEvent):
+        """监听进群/退群事件"""
+        client = event.bot
+        if not hasattr(event, "message_obj") or not hasattr(
+            event.message_obj, "raw_message"
+        ):
+            return
+        raw_message = event.message_obj.raw_message
+        # 处理 raw_message
+        if not raw_message or not isinstance(raw_message, dict):
+            return
+        # 群邀请事件
+        if (
+            raw_message.get("post_type") == "request"
+            and raw_message.get("request_type") == "group"
+            and raw_message.get("sub_type") == "add"
+        ):
+            # 提取信息
+            user_id = str(raw_message.get("user_id", ""))
+            group_id = str(raw_message.get("group_id", ""))
+            comment = raw_message.get("comment") or "无"
+            flag = raw_message.get("flag", "")
+            nickname = (await client.get_stranger_info(user_id=int(user_id)))[
+                "nickname"
+            ] or "未知昵称"
+            # 通知群友
+            notice = (
+                f"【收到进群申请】同意吗："
+                f"\n昵称：{nickname}"
+                f"\nQQ：{user_id}"
+                f"\nflag：{flag}"
+                f"\n验证信息：{comment}"
+            )
+            yield event.plain_result(notice)
+
+            # 自动拒绝
+            if (
+                self.reject_ids
+                and group_id in self.reject_ids
+                and user_id in self.reject_ids[group_id]
+            ):
+                await client.set_group_add_request(
+                    flag=flag, sub_type="add", approve=False, reason="黑名单用户"
+                )
+                yield event.plain_result("黑名单用户，已自动拒绝进群")
+                return
+            # 自动同意
+            elif self.accept_keywords and group_id in self.accept_keywords:
+                for keyword in self.accept_keywords[group_id]:
+                    if keyword.lower() in comment.lower():
+                        await client.set_group_add_request(
+                            flag=flag, sub_type="add", approve=True
+                        )
+                        yield event.plain_result("验证通过，已自动同意进群")
+                        return
+
+        # 主动退群事件
+        elif (
+            raw_message.get("post_type") == "notice"
+            and raw_message.get("notice_type") == "group_decrease"
+            and raw_message.get("sub_type") == "leave"
+        ):
+            user_id = str(raw_message.get("user_id", ""))
+            group_id = str(raw_message.get("group_id", ""))
+            nickname = (await client.get_stranger_info(user_id=int(user_id)))[
+                "nickname"
+            ] or "未知昵称"
+            self.reject_ids.setdefault(group_id, []).append(user_id)
+            self.config["reject_ids_list"] = [self.reject_ids]
+            self.config.save_config()
+            yield event.plain_result(f"{nickname}({user_id})主动退群了，已拉进黑名单")
 
     @staticmethod
     async def approve(
@@ -1005,3 +1033,14 @@ class AdminPlugin(Star):
                 return reply
             except:  # noqa: E722
                 return "这条申请处理过了或者格式不对"
+
+    async def terminate(self):
+        """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+        for task in self.scheduler_tasks.values():
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        logger.info("插件 astrbot_plugin_QQAdmin 已被终止")

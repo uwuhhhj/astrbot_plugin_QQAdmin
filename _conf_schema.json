@@ -276,8 +276,8 @@
         ],
         "default": "管理员"
       },
-      "add_group_keyword_perm": {
-        "description": "添加/删除进群关键词",
+      "add_accept_keyword_perm": {
+        "description": "添加进群关键词",
         "type": "string",
         "options": [
           "超管",
@@ -287,8 +287,41 @@
         ],
         "default": "管理员"
       },
-      "add_group_approve_perm": {
-        "description": "批准/不批准",
+      "remove_accept_keyword_perm": {
+        "description": "删除进群关键词",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "view_accept_keywords_perm": {
+        "description": "查看进群关键词",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      },
+      "agree_add_group_perm": {
+        "description": "同意",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "refuse_add_group_perm": {
+        "description": "拒绝",
         "type": "string",
         "options": [
           "超管",
@@ -304,6 +337,14 @@
     "description": "进群关键词数据",
     "type": "list",
     "hint": "当用户进群时，会检查其消息是否包含关键词，若包含则会自动批准进群",
+    "invisible": true,
+    "default": []
+  },
+  "reject_ids_list": {
+    "description": "自动拒绝ID列表",
+    "type": "list",
+    "hint": "主动退群者将会被拉黑（即被添加到此列表）",
+    "invisible": true,
     "default": []
   },
   "ban_time_setting": {
