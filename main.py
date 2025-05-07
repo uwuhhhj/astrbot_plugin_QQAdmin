@@ -34,7 +34,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.0.7",
+    "2.0.8",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
@@ -281,7 +281,7 @@ class AdminPlugin(Star):
 
     @filter.command("改名")
     async def set_card(
-        self, event: AiocqhttpMessageEvent, target_card: str | None = None
+        self, event: AiocqhttpMessageEvent, target_card: str| int | None = None
     ):
         """改名 xxx @user"""
         if result := await self.perm_block(
@@ -301,12 +301,12 @@ class AdminPlugin(Star):
             replay = f"已将{target_name}的群昵称改为【{target_card}】"
             yield event.plain_result(replay)
             await client.set_group_card(
-                group_id=int(group_id), user_id=int(tid), card=target_card
+                group_id=int(group_id), user_id=int(tid), card=str(target_card)
             )
 
     @filter.command("改我")
     async def set_card_me(
-        self, event: AiocqhttpMessageEvent, target_card: str | None = None
+        self, event: AiocqhttpMessageEvent, target_card: str | int | None = None
     ):
         """改我 xxx"""
         if result := await self.perm_block(
@@ -321,13 +321,13 @@ class AdminPlugin(Star):
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
         await client.set_group_card(
-            group_id=int(group_id), user_id=int(send_id), card=target_card
+            group_id=int(group_id), user_id=int(send_id), card=str(target_card)
         )
         yield event.plain_result(f"已将你的群昵称改为【{target_card}】")
 
     @filter.command("头衔")
     async def set_title(
-        self, event: AiocqhttpMessageEvent, new_title: str | None = None
+        self, event: AiocqhttpMessageEvent, new_title: str | int | None = None
     ):
         """头衔 xxx @user"""
         if result := await self.perm_block(
@@ -348,13 +348,13 @@ class AdminPlugin(Star):
             await client.set_group_special_title(
                 group_id=int(group_id),
                 user_id=int(tid),
-                special_title=new_title,
+                special_title=str(new_title),
                 duration=-1,
             )
 
     @filter.command("我要头衔")
     async def set_title_me(
-        self, event: AiocqhttpMessageEvent, new_title: str | None = None
+        self, event: AiocqhttpMessageEvent, new_title: str | int | None = None
     ):
         """我要头衔 xxx"""
         if result := await self.perm_block(
@@ -371,7 +371,7 @@ class AdminPlugin(Star):
         await client.set_group_special_title(
             group_id=int(group_id),
             user_id=int(send_id),
-            special_title=new_title,
+            special_title=str(new_title),
             duration=-1,
         )
         yield event.plain_result(f"已将你的头衔改为【{new_title}】")
@@ -613,7 +613,7 @@ class AdminPlugin(Star):
 
     @filter.command("设置群名")
     async def set_group_name(
-        self, event: AiocqhttpMessageEvent, group_name: str | None = None
+        self, event: AiocqhttpMessageEvent, group_name: str | int | None = None
     ):
         """/设置群名 xxx"""
         if result := await self.perm_block(
@@ -627,7 +627,7 @@ class AdminPlugin(Star):
 
         client = event.bot
         group_id = event.get_group_id()
-        await client.set_group_name(group_id=int(group_id), group_name=group_name)
+        await client.set_group_name(group_id=int(group_id), group_name=str(group_name))
         yield event.plain_result("群名更新啦>v<")
 
     @filter.command("群友信息")
