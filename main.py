@@ -41,9 +41,10 @@ class AdminPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        # 额外超级管理员列表
-        self.superusers: list[str] = config.get("superusers", [])
-        self.superusers.extend(context.get_config()["admins_id"])
+        # 额外超级管理员列表(自动去除重复项)
+        superusers_set = set(config.get("superusers", []))
+        superusers_set.update(context.get_config().get("admins_id", []))
+        self.superusers = list(superusers_set)
 
         # 权限配置
         self.perms: Dict = config.get("perm_setting", {})
