@@ -34,7 +34,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.0.8",
+    "2.0.9",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
@@ -89,6 +89,7 @@ class AdminPlugin(Star):
         self.reject_ids: dict[str, list[str]] = (
             self.reject_ids_list[0] if self.reject_ids_list else {}
         )
+        self.auto_black: bool = config.get("auto_black", True)
 
         if datetime.today().weekday() == 3:
             self.print_logo()  # 星期四打印 Logo，哈哈哈
@@ -282,7 +283,7 @@ class AdminPlugin(Star):
 
     @filter.command("改名")
     async def set_card(
-        self, event: AiocqhttpMessageEvent, target_card: str| int | None = None
+        self, event: AiocqhttpMessageEvent, target_card: str | int | None = None
     ):
         """改名 xxx @user"""
         if result := await self.perm_block(
@@ -857,7 +858,7 @@ class AdminPlugin(Star):
         event.stop_event()
 
     @filter.command("添加进群关键词")
-    async def add_accept_keyword(self, event: AiocqhttpMessageEvent, keywords_str: str):
+    async def add_accept_keyword(self, event: AiocqhttpMessageEvent):
         """添加自动批准进群的关键词"""
         if result := await self.perm_block(
             event,
@@ -866,7 +867,11 @@ class AdminPlugin(Star):
         ):
             yield event.plain_result(result)
             return
-        keywords = keywords_str.strip().replace("，", ",").split(",")
+        message_parts = event.message_str.strip().split(" ")
+        if len(message_parts) < 2:
+            yield event.plain_result("请提供至少一个关键词。")
+            return
+        keywords = list(set(message_parts[1:]))
         group_id = event.get_group_id()
         self.accept_keywords.setdefault(group_id, []).extend(keywords)
         self.config["accept_keywords_list"] = [self.accept_keywords]
@@ -874,9 +879,7 @@ class AdminPlugin(Star):
         yield event.plain_result(f"新增进群关键词：{keywords}")
 
     @filter.command("删除进群关键词")
-    async def remove_accept_keyword(
-        self, event: AiocqhttpMessageEvent, keywords_str: str
-    ):
+    async def remove_accept_keyword(self, event: AiocqhttpMessageEvent):
         """删除自动批准进群的关键词"""
         if result := await self.perm_block(
             event,
@@ -885,7 +888,11 @@ class AdminPlugin(Star):
         ):
             yield event.plain_result(result)
             return
-        keywords = keywords_str.strip().replace("，", ",").split(",")
+        message_parts = event.message_str.strip().split(" ")
+        if len(message_parts) < 2:
+            yield event.plain_result("请提供至少一个关键词。")
+            return
+        keywords = list(set(message_parts[1:]))
         group_id = event.get_group_id()
         if group_id not in self.accept_keywords:
             yield event.plain_result("本群没有设置进群关键词")
@@ -915,14 +922,18 @@ class AdminPlugin(Star):
         yield event.plain_result(f"本群的进群关键词：{self.accept_keywords[group_id]}")
 
     @filter.command("添加进群黑名单")
-    async def add_reject_ids(self, event: AiocqhttpMessageEvent, ids_str: str | int):
+    async def add_reject_ids(self, event: AiocqhttpMessageEvent):
         """添加指定ID到进群黑名单"""
         if result := await self.perm_block(
             event, user_perm=self.perms.get("add_reject_ids_perm"), bot_perm="管理员"
         ):
             yield event.plain_result(result)
             return
-        reject_ids = str(ids_str).strip().replace("，", ",").split(",")
+        message_parts = event.message_str.strip().split(" ")
+        if len(message_parts) < 2:
+            yield event.plain_result("请提供至少一个关键词。")
+            return
+        reject_ids = list(set(message_parts[1:]))
         group_id = event.get_group_id()
         self.reject_ids.setdefault(group_id, []).extend(reject_ids)
         self.config["reject_ids_list"] = [self.reject_ids]
@@ -930,14 +941,18 @@ class AdminPlugin(Star):
         yield event.plain_result(f"进群黑名单新增ID：{reject_ids}")
 
     @filter.command("删除进群黑名单")
-    async def remove_reject_ids(self, event: AiocqhttpMessageEvent, ids_str: str | int):
+    async def remove_reject_ids(self, event: AiocqhttpMessageEvent):
         """从进群黑名单中删除指定ID"""
         if result := await self.perm_block(
             event, user_perm=self.perms.get("remove_reject_ids_perm"), bot_perm="管理员"
         ):
             yield event.plain_result(result)
             return
-        reject_ids = str(ids_str).strip().replace("，", ",").split(",")
+        message_parts = event.message_str.strip().split(" ")
+        if len(message_parts) < 2:
+            yield event.plain_result("请提供至少一个关键词。")
+            return
+        reject_ids = list(set(message_parts[1:]))
         group_id = event.get_group_id()
         if group_id not in self.reject_ids:
             yield event.plain_result("本群没有设置进群黑名单")
@@ -991,7 +1006,6 @@ class AdminPlugin(Star):
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     async def event_monitoring(self, event: AiocqhttpMessageEvent):
         """监听进群/退群事件"""
-        client = event.bot
         if not hasattr(event, "message_obj") or not hasattr(
             event.message_obj, "raw_message"
         ):
@@ -1000,6 +1014,7 @@ class AdminPlugin(Star):
         # 处理 raw_message
         if not raw_message or not isinstance(raw_message, dict):
             return
+        client = event.bot
         # 群邀请事件
         if (
             raw_message.get("post_type") == "request"
@@ -1047,7 +1062,8 @@ class AdminPlugin(Star):
 
         # 主动退群事件
         elif (
-            raw_message.get("post_type") == "notice"
+            self.auto_black
+            and raw_message.get("post_type") == "notice"
             and raw_message.get("notice_type") == "group_decrease"
             and raw_message.get("sub_type") == "leave"
         ):
@@ -1095,7 +1111,7 @@ class AdminPlugin(Star):
     async def help(self, event: AiocqhttpMessageEvent):
         """查看群管帮助"""
         help_text = help_text = (
-            "【群管帮助】：\n\n"
+            "【群管帮助】(前缀以bot设置的为准)\n\n"
             "/禁言 <时长> @<用户> - 禁言指定用户，时长单位为秒，不填时长则随机禁言\n\n"
             "/禁我 <时长> - 自己禁言自己，时长单位为秒，不填时长则随机禁言\n\n"
             "/解禁 @<用户> - 解除指定用户的禁言\n\n"
