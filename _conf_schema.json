@@ -1,8 +1,8 @@
 {
   "superusers": {
-    "description": "超级管理员",
+    "description": "额外超级管理员列表",
     "type": "list",
-    "hint": "提供单独设置的超级管理员列表，拥有最高权限",
+    "hint": "已自动添加astrbot的管理员到本插件的超级管理员列表，此处另外提供提供单独设置的额外超级管理员列表，都拥有最高权限",
     "default": [
       "2936169201"
     ]
@@ -309,6 +309,39 @@
         ],
         "default": "成员"
       },
+      "add_reject_ids_perm": {
+        "description": "添加进群黑名单",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "remove_reject_ids_perm": {
+        "description": "删除进群黑名单",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "管理员"
+      },
+      "view_reject_ids_perm": {
+        "description": "查看进群黑名单",
+        "type": "string",
+        "options": [
+          "超管",
+          "群主",
+          "管理员",
+          "成员"
+        ],
+        "default": "成员"
+      },
       "agree_add_group_perm": {
         "description": "同意",
         "type": "string",
@@ -340,8 +373,14 @@
     "invisible": true,
     "default": []
   },
+  "auto_black": {
+    "description": "自动拉黑",
+    "type": "bool",
+    "hint": "当用户主动退群时，是否自动拉黑（即添加到拒绝列表）",
+    "default": true
+  },
   "reject_ids_list": {
-    "description": "自动拒绝ID列表",
+    "description": "拉黑列表",
     "type": "list",
     "hint": "主动退群者将会被拉黑（即被添加到此列表）",
     "invisible": true,
