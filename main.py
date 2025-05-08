@@ -34,7 +34,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.0.9",
+    "2.1.0",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
@@ -1037,7 +1037,7 @@ class AdminPlugin(Star):
                 f"\n昵称：{nickname}"
                 f"\nQQ：{user_id}"
                 f"\nflag：{flag}"
-                f"\n验证信息：{comment}"
+                f"\n{comment}"
             )
             yield event.plain_result(notice)
 
