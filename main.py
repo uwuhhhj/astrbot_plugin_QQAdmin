@@ -139,6 +139,8 @@ class AdminPlugin(Star):
         """获取指定用户的权限等级，等级0,1,2,3，对应权限分别开放到超管、群主、管理员、成员"""
         client = event.bot
         group_id = event.get_group_id()
+        if not group_id: #  非群聊
+            return 4
         if str(user_id) in self.superusers:
             return 0
         all_info = await client.get_group_member_info(
