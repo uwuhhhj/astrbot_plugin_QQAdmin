@@ -34,7 +34,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.1.0",
+    "2.1.1",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
@@ -200,40 +200,45 @@ class AdminPlugin(Star):
         return None  # 权限检查通过，未被阻塞
 
     @filter.command("禁言")
-    async def set_ban(self, event: AiocqhttpMessageEvent, time: int | None = None):
+    async def set_ban(self, event: AiocqhttpMessageEvent, ban_time = None):
         """禁言 60 @user"""
         if result := await self.perm_block(
             event, user_perm=self.perms.get("set_ban_perm")
         ):
             yield event.plain_result(result)
             return
-        client = event.bot
         group_id = event.get_group_id()
-        ban_time = time or random.randint(
-            self.ban_rand_time_min, self.ban_rand_time_max
-        )
+        if not ban_time or not isinstance(ban_time, int):
+            ban_time = random.randint(
+                self.ban_rand_time_min, self.ban_rand_time_max
+            )
         tids = self.get_ats(event)
         for tid in tids:
-            await client.set_group_ban(
-                group_id=int(group_id), user_id=int(tid), duration=ban_time
-            )
+            try:
+                await event.bot.set_group_ban(
+                    group_id=int(group_id), user_id=int(tid), duration=ban_time
+                )
+            except:  # noqa: E722
+                pass
         event.stop_event()
 
     @filter.command("禁我")
-    async def set_ban_me(self, event: AiocqhttpMessageEvent, time: int | None = None):
+    async def set_ban_me(self, event: AiocqhttpMessageEvent, ban_time: int | None = None):
         """禁我 60"""
         if result := await self.perm_block(
             event, user_perm=self.perms.get("set_ban_me_perm")
         ):
             yield event.plain_result(result)
             return
-        client = event.bot
         group_id = event.get_group_id()
         send_id = event.get_sender_id()
-        time = time or random.randint(self.ban_rand_time_min, self.ban_rand_time_max)
+        if not ban_time or not isinstance(ban_time, int):
+            ban_time = random.randint(
+                self.ban_rand_time_min, self.ban_rand_time_max
+            )
         try:
-            await client.set_group_ban(
-                group_id=int(group_id), user_id=int(send_id), duration=time
+            await event.bot.set_group_ban(
+                group_id=int(group_id), user_id=int(send_id), duration=ban_time
             )
             yield event.plain_result(random.choice(BAN_ME_QUOTES))
         except:  # noqa: E722
@@ -665,14 +670,16 @@ class AdminPlugin(Star):
         yield event.image_result(url)
 
     @filter.command("发布群公告")
-    async def send_group_notice(
-        self, event: AiocqhttpMessageEvent, content: str | None = None
-    ):
+    async def send_group_notice(self, event: AiocqhttpMessageEvent):
         """(可引用一张图片)/发布群公告 xxx"""
         if result := await self.perm_block(
             event, user_perm=self.perms.get("send_group_notice_perm")
         ):
             yield event.plain_result(result)
+            return
+        content = event.message_str.removeprefix("发布群公告").strip()
+        if not content:
+            yield event.plain_result("你又不说要发什么群公告")
             return
         client = event.bot
         group_id = event.get_group_id()
@@ -703,6 +710,7 @@ class AdminPlugin(Star):
         await client._send_group_notice(
             group_id=group_id, content=content, image=save_path
         )
+        event.stop_event()
 
     @filter.command("群公告")
     async def get_group_notice(self, event: AiocqhttpMessageEvent):
@@ -1160,3 +1168,7 @@ class AdminPlugin(Star):
                 except asyncio.CancelledError:
                     pass
         logger.info("插件 astrbot_plugin_QQAdmin 已被终止")
+
+
+
+
