@@ -13,6 +13,10 @@ from astrbot.core import AstrBotConfig
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
     AiocqhttpMessageEvent,
 )
+from astrbot.core.utils.session_waiter import (
+    session_waiter,
+    SessionController,
+)
 from astrbot.core.star.filter.event_message_type import EventMessageType
 
 
@@ -34,7 +38,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.1.1",
+    "2.1.2",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
@@ -639,36 +643,6 @@ class AdminPlugin(Star):
         await client.set_group_name(group_id=int(group_id), group_name=str(group_name))
         yield event.plain_result("群名更新啦>v<")
 
-    @filter.command("群友信息")
-    async def get_group_member_list(self, event: AiocqhttpMessageEvent):
-        """查看群友信息，人数太多时可能会处理失败"""
-        if result := await self.perm_block(
-            event,
-            user_perm=self.perms.get("get_group_member_list_perm"),
-            bot_perm="成员",
-        ):
-            yield event.plain_result(result)
-            return
-        yield event.plain_result("获取中...")
-        client = event.bot
-        group_id = event.get_group_id()
-        members_data = await client.get_group_member_list(group_id=int(group_id))
-        info_list = [
-            (
-                f"{self.format_join_time(member['join_time'])}："
-                f"【{member['level']}】"
-                f"{member['user_id']}-"
-                f"{member['nickname']}"
-            )
-            for member in members_data
-        ]
-        info_list.sort(key=lambda x: datetime.strptime(x.split("：")[0], "%Y-%m-%d"))
-        info_str = "进群时间：【等级】QQ-昵称\n\n"
-        info_str += "\n\n".join(info_list)
-        # TODO 做张好看的图片来展示
-        url = await self.text_to_image(info_str)
-        yield event.image_result(url)
-
     @filter.command("发布群公告")
     async def send_group_notice(self, event: AiocqhttpMessageEvent):
         """(可引用一张图片)/发布群公告 xxx"""
@@ -1117,6 +1091,134 @@ class AdminPlugin(Star):
             except:  # noqa: E722
                 return "这条申请处理过了或者格式不对"
 
+    @filter.command("群友信息")
+    async def get_group_member_list(self, event: AiocqhttpMessageEvent):
+        """查看群友信息，人数太多时可能会处理失败"""
+        if result := await self.perm_block(
+            event,
+            user_perm=self.perms.get("get_group_member_list_perm"),
+            bot_perm="成员",
+        ):
+            yield event.plain_result(result)
+            return
+        yield event.plain_result("获取中...")
+        client = event.bot
+        group_id = event.get_group_id()
+        members_data = await client.get_group_member_list(group_id=int(group_id))
+        info_list = [
+            (
+                f"{self.format_join_time(member['join_time'])}："
+                f"【{member['level']}】"
+                f"{member['user_id']}-"
+                f"{member['nickname']}"
+            )
+            for member in members_data
+        ]
+        info_list.sort(key=lambda x: datetime.strptime(x.split("：")[0], "%Y-%m-%d"))
+        info_str = "进群时间：【等级】QQ-昵称\n\n"
+        info_str += "\n\n".join(info_list)
+        # TODO 做张好看的图片来展示
+        url = await self.text_to_image(info_str)
+        yield event.image_result(url)
+
+    @filter.command("清理群友")
+    async def clear_group_member(
+        self, event: AiocqhttpMessageEvent, inactive_days: int = 30, under_level: int = 10
+    ):
+        """/清理群友 未发言天数 群等级"""
+        if result := await self.perm_block(
+            event,
+            user_perm=self.perms.get("clear_group_member_perm"),
+            bot_perm="管理员",
+        ):
+            yield event.plain_result(result)
+            return
+
+        yield event.plain_result("正在查找满足条件的群友...")
+
+        client = event.bot
+        group_id = event.get_group_id()
+        sender_id = event.get_sender_id()
+
+        try:
+            members_data = await client.get_group_member_list(group_id=int(group_id))
+        except Exception as e:
+            yield event.plain_result(f"获取群成员信息失败：{e}")
+            return
+
+        now_ts = int(datetime.now().timestamp())
+        threshold_ts = now_ts - inactive_days * 86400
+        clear_ids = []
+        clear_info = []
+
+        for member in members_data:
+            last_sent = member.get("last_sent_time", 0)
+            level = int(member.get("level", 0))
+            user_id = member["user_id"]
+            nickname = member.get("nickname", "（无昵称）")
+
+            if last_sent < threshold_ts and level < under_level:
+                clear_ids.append(user_id)
+                last_active_str = self.format_join_time(last_sent)
+                clear_info.append(
+                    f"{last_active_str}：【{level}】{user_id}-{nickname}"
+                )
+
+        if not clear_ids:
+            yield event.plain_result("无符合条件的群友")
+            return
+
+        # 排序 + 生成图像
+        clear_info.sort(key=lambda x: datetime.strptime(x.split("：")[0], "%Y-%m-%d"))
+        info_str = f"以下群友{inactive_days}天内未发言，且等级低于{under_level}:\n\n"
+        info_str += "\n\n".join(clear_info)
+        try:
+            url = await self.text_to_image(info_str)
+            yield event.image_result(url)
+        except Exception as e:
+            yield event.plain_result(f"生成图像失败：{e}")
+
+        notice_chain = [Comp.Plain("请发送“确认清理”或“取消清理”：")]
+        for clear_id in clear_ids:
+            notice_chain.append(Comp.At(qq=clear_id)) # type: ignore
+        yield event.chain_result(notice_chain) # type: ignore
+
+        @session_waiter(timeout=30)  # type: ignore
+        async def empty_mention_waiter(
+            controller: SessionController, event: AiocqhttpMessageEvent
+        ):
+            if group_id != event.get_group_id() or sender_id != event.get_sender_id():
+                return
+
+            if event.message_str == "取消清理":
+                await event.send(event.plain_result("清理群友任务已取消"))
+                controller.stop()
+                return
+
+            if event.message_str == "确认清理":
+                for clear_id in clear_ids:
+                    try:
+                        target_name = await self.get_nickname(event, user_id=clear_id)
+                        await event.bot.set_group_kick(
+                            group_id=int(group_id),
+                            user_id=int(clear_id),
+                            reject_add_request=False,
+                        )
+                        await event.send(event.plain_result(f"已将 {target_name}({clear_id}) 踢出本群。"))
+                    except Exception as e:
+                        await event.send(event.plain_result(f"踢出 {target_name}({clear_id}) 失败：{e}"))
+                controller.stop()
+
+        try:
+            await empty_mention_waiter(event)
+        except TimeoutError as _:
+            yield event.plain_result("等待超时！")
+        except Exception as e:
+            logger.error("清理群友任务出错: " + str(e))
+        finally:
+            event.stop_event()
+
+
     @filter.command("群管帮助")
     async def help(self, event: AiocqhttpMessageEvent):
         """查看群管帮助"""
@@ -1141,7 +1243,6 @@ class AdminPlugin(Star):
             "/撤回 - 撤回引用的消息和自己发送的消息\n\n"
             "/设置群头像 - 引用图片设置群头像\n\n"
             "/设置群名 <新群名> - 修改群名称\n\n"
-            "/群友信息 - 查看群成员信息\n\n"
             "/发布群公告 <内容> - 发布群公告，可引用图片\n\n"
             "/群公告 - 查看群公告\n\n"
             "/开启宵禁 <开始时间> <结束时间> - 设置并开启宵禁任务，时间格式为24小时制的HH:MM，默认时间为23:30到6:00\n\n"
@@ -1154,6 +1255,8 @@ class AdminPlugin(Star):
             "/查看进群黑名单 - 查看当前群的进群黑名单\n\n"
             "/同意 - 同意引用的进群申请\n\n"
             "/拒绝 <理由> - 拒绝引用的进群申请，可附带拒绝理由\n\n"
+            "/群友信息 - 查看群成员信息\n\n"
+            "/清理群友 <未发言天数> <群等级> -  清理群友，可指定未发言天数和群等级"
         )
         url = await self.text_to_image(help_text)
         yield event.image_result(url)
@@ -1168,7 +1271,4 @@ class AdminPlugin(Star):
                 except asyncio.CancelledError:
                     pass
         logger.info("插件 astrbot_plugin_QQAdmin 已被终止")
-
-
-
 
