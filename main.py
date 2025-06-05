@@ -38,7 +38,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
     "astrbot_plugin_QQAdmin",
     "Zhalslar",
     "帮助你管理群聊",
-    "2.1.2",
+    "2.1.3",
     "https://github.com/Zhalslar/astrbot_plugin_QQAdmin",
 )
 class AdminPlugin(Star):
@@ -959,17 +959,17 @@ class AdminPlugin(Star):
             return
         group_id = event.get_group_id()
         if group_id not in self.accept_keywords:
-            yield event.plain_result("本群没有设置进群关键词")
+            yield event.plain_result("本群没有设置进群黑名单")
             return
-        yield event.plain_result(f"本群的进群关键词：{self.accept_keywords[group_id]}")
+        yield event.plain_result(f"本群的进群黑名单：{self.reject_ids[group_id]}")
 
     @filter.command("同意")
     async def agree_add_group(self, event: AiocqhttpMessageEvent, extra: str = ""):
         """同意申请者进群"""
-        if result := await self.perm_block(
+        if result := await self.perm_block(  # noqa: F841
             event, user_perm=self.perms.get("agree_add_group_perm"), bot_perm="管理员"
         ):
-            yield event.plain_result(result)
+            #yield event.plain_result(result) # 忽略权限提醒，防止和relationship插件冲突
             return
         reply = await self.approve(event=event, extra=extra, approve=True)
         if reply:
@@ -978,10 +978,10 @@ class AdminPlugin(Star):
     @filter.command("拒绝", alias={"不同意"})
     async def refuse_add_group(self, event: AiocqhttpMessageEvent, extra: str = ""):
         """拒绝申请者进群"""
-        if result := await self.perm_block(
+        if result := await self.perm_block(  # noqa: F841
             event, user_perm=self.perms.get("refuse_add_group_perm"), bot_perm="管理员"
         ):
-            yield event.plain_result(result)
+            # yield event.plain_result(result) # 忽略权限提醒，防止和relationship插件冲突
             return
         reply = await self.approve(event=event, extra=extra, approve=False)
         if reply:
