@@ -1016,10 +1016,7 @@ class AdminPlugin(Star):
             # 通知群友
             notice = (
                 f"【收到进群申请】同意吗："
-                f"\n昵称：{nickname}"
                 f"\nQQ：{user_id}"
-                f"\nflag：{flag}"
-                f"\n{comment}"
             )
             yield event.plain_result(notice)
 
